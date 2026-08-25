@@ -1,2 +1,2 @@
-import {NextResponse} from 'next/server';import {makeLinkToken} from '@/lib/providers/plaid';
-export async function POST(){try{const t=await makeLinkToken();return NextResponse.json(t?{link_token:t}:{link_token:null,mode:'configuration-required'});}catch{return NextResponse.json({error:'Unable to create Plaid Link token'},{status:500})}}
+import {NextRequest,NextResponse} from 'next/server';import {makeLinkToken} from '@/lib/providers/plaid';import {requireWriteSession} from '@/lib/security/request-auth';
+export async function POST(req:NextRequest){const auth=await requireWriteSession(req);if(!auth.ok)return NextResponse.json({error:auth.error},{status:auth.status});try{const t=await makeLinkToken();return NextResponse.json(t?{link_token:t}:{link_token:null,mode:'configuration-required'});}catch{return NextResponse.json({error:'Unable to create Plaid Link token'},{status:500})}}

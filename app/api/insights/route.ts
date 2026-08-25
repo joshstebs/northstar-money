@@ -1,2 +1,2 @@
-import {NextResponse} from 'next/server';
-export async function GET(){return NextResponse.json({summary:'Dining is above baseline and recurring services should be reviewed.',potentialMonthlySavings:612,actions:[{title:'Dining reset',amount:169},{title:'Subscription review',amount:63},{title:'Extra credit-card payment',amount:250}]})}
+import {NextResponse} from 'next/server';import {requireSession} from '@/lib/security/request-auth';import {financialSnapshot} from '@/lib/finance/analytics';import {generateAdvisorBrief} from '@/lib/ai/advisor';
+export async function GET(){const auth=await requireSession();if(!auth.ok)return NextResponse.json({error:auth.error},{status:auth.status});const snapshot=await financialSnapshot();let aiBrief:null|string=null;try{aiBrief=await generateAdvisorBrief(snapshot)}catch(e){console.error('AI advisor unavailable',e)}return NextResponse.json({snapshot,aiBrief,aiConfigured:Boolean(process.env.OPENAI_API_KEY)})}
