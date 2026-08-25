@@ -3,10 +3,27 @@ on:
   pull_request:
   push:
     branches: [master]
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: northstar
+          POSTGRES_PASSWORD: northstar_ci
+          POSTGRES_DB: northstar
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U northstar -d northstar"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://northstar:northstar_ci@localhost:5432/northstar
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -14,15 +31,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npx prisma validate
       - run: npx prisma generate
-        env:
-          DATABASE_URL: postgresql://user:pass@localhost:5432/northstar
+      - run: npx prisma migrate deploy
       - run: npm run typecheck
-        env:
-          DATABASE_URL: postgresql://user:pass@localhost:5432/northstar
       - run: npm run build
         env:
-          DATABASE_URL: postgresql://user:pass@localhost:5432/northstar
+          DATABASE_URL: postgresql://northstar:northstar_ci@localhost:5432/northstar
           APP_URL: http://localhost:3000
           APP_AUTH_SECRET: ci-only-not-a-production-secret
           APP_AUTH_PASSWORD_HASH: pbkdf2-sha512$210000$Y2ktc2FsdA$7FNbf8x6_xp6pB_TjMOuZGDj8J8R79EOn-FakeHashForBuildOnly
