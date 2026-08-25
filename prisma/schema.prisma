@@ -51,6 +51,8 @@ model Account {
   currency           String        @default("CAD")
   currentBalance     Decimal?
   availableBalance   Decimal?
+  interestRate       Decimal?
+  minimumPayment     Decimal?
   user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   connection         Connection    @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   transactions       Transaction[]
