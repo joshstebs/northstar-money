@@ -32,6 +32,9 @@ Private, read-only Canadian personal-finance dashboard with Plaid + Flinks conne
 
 > Flinks no longer supports unattended nightly refresh for most Canadian institutions. When a bank requires user presence/MFA, Northstar marks that connection for attention rather than claiming an autonomous refresh succeeded.
 
+## Scheduled jobs on Vercel Hobby
+Stebs Co currently uses Vercel Hobby. Northstar therefore defines only two once-daily UTC cron entries (10:00 and 11:00 UTC). The handler accepts only the call that resolves to 6 AM in `America/Toronto`, so daylight-saving time is handled without a sub-daily schedule. That same accepted run performs account synchronization and creates weekly/monthly financial briefs when applicable.
+
 ## Setup
 1. `npm ci`
 2. Copy `.env.example` to `.env.local`.
