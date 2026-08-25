@@ -1,0 +1,2 @@
+import {NextRequest,NextResponse} from 'next/server';import {plaidClient} from '@/lib/providers/plaid';
+export async function POST(req:NextRequest){try{const {public_token}=await req.json();if(!public_token)return NextResponse.json({error:'public_token required'},{status:400});const r=await plaidClient().itemPublicTokenExchange({public_token});/* TODO encrypt and persist r.data.access_token server-side */return NextResponse.json({connected:true,item_id:r.data.item_id});}catch{return NextResponse.json({error:'Unable to exchange Plaid token'},{status:500})}}
