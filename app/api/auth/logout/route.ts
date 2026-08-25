@@ -1,0 +1,1 @@
+import {NextResponse} from 'next/server';import {SESSION_COOKIE} from '@/lib/security/auth';export async function POST(){const r=NextResponse.json({ok:true});r.cookies.set(SESSION_COOKIE,'',{httpOnly:true,path:'/',maxAge:0,sameSite:'strict',secure:process.env.NODE_ENV==='production'});return r}
