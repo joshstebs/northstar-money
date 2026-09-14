@@ -50,7 +50,7 @@ export async function verifyPlaidWebhook(rawBody:string,signedJwt:string|null|un
   }
 
   try{
-    const key=createPublicKey({key:jwk as JsonWebKey,format:'jwk'});
+    const key=createPublicKey({key:jwk,format:'jwk'} as any);
     const signature=Buffer.from(parts[2],'base64url');
     const signed=Buffer.from(`${parts[0]}.${parts[1]}`);
     if(!verifySignature('sha256',signed,{key,dsaEncoding:'ieee-p1363'},signature))return false;
