@@ -34,6 +34,7 @@ jobs:
       - run: npx prisma validate
       - run: npx prisma generate
       - run: npx prisma migrate deploy
+      - run: npm test
       - run: npm run typecheck
       - run: npm run build
         env:
@@ -42,3 +43,4 @@ jobs:
           APP_AUTH_SECRET: ci-only-not-a-production-secret
           APP_AUTH_PASSWORD_HASH: pbkdf2-sha512$210000$Y2ktc2FsdA$7FNbf8x6_xp6pB_TjMOuZGDj8J8R79EOn-FakeHashForBuildOnly
           APP_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+

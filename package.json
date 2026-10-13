@@ -12,7 +12,9 @@
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate deploy",
-    "verify": "npm run db:validate && npm run db:generate && npm run typecheck && npm run build"
+    "verify": "npm run db:validate && npm run db:generate && npm run typecheck && npm run build",
+    "test": "node --test tests/planning.test.mjs",
+    "test:planning:http": "node scripts/test-planning-http.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.16.0",
