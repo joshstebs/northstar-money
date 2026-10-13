@@ -30,13 +30,13 @@ test('invalid amounts are rejected instead of coerced into zero', () => {
   for (const apr of [-1, 101, true, 'NaN']) assert.throws(() => parse({kind: 'debt-terms', accountId: 'card', apr}));
 });
 test('rolled dates and malformed months are rejected', () => {
-  for (const month of ['0000-01', '2026-13', '2026-00', '2026-1', '', null, true]) assert.throws(() => parse({...budget, month}));
+  for (const month of ['0000-01', '2026-13', '2026-00', '2026-1', true]) assert.throws(() => parse({...budget, month}));
   for (const targetDate of ['0000-01-01', '2026-02-29', '2026-04-31', '2026-13-01', 'next week', true]) assert.throws(() => parse({kind: 'goal', name: 'Goal', targetAmount: 100, targetDate}));
   assert.throws(() => parse(null));
   assert.throws(() => parse({kind: 'unknown'}));
 });
 test('provider category spellings match without rewriting stored values', () => {
-  for (const value of ['FOOD_AND_DRINK', 'food and drink', '  Food__AND  Drink ']) assert.equal(normalizeCategory(value), 'FOOD AND DRINK');
+  for (const value of ['FOOD_AND_DRINK', 'food and drink', '  Food__AND  Drink ', '_Food__AND Drink_']) assert.equal(normalizeCategory(value), 'FOOD AND DRINK');
 });
 test('financial snapshot counts matching transactions against existing underscore budget', async () => {
   const now = new Date();
@@ -58,4 +58,11 @@ test('financial snapshot counts matching transactions against existing underscor
   assert.equal(result.budgets[0].spent, 40);
   assert.equal(result.budgets[0].remaining, 60);
   assert.equal(result.budgets[0].percent, 40);
+});
+
+test('cleared month and goal id retain optional form semantics', () => {
+  const now = new Date('2026-10-13T12:00:00.000Z');
+  for (const month of [undefined, null, '']) assert.equal(parse({...budget, month}, now).month.toISOString(), '2026-10-01T00:00:00.000Z');
+  for (const id of [undefined, null, '']) assert.equal(parse({kind: 'goal', name: 'Goal', targetAmount: 100, id}).id, undefined);
+  for (const id of [true, false, 12, {}, [], ' ']) assert.throws(() => parse({kind: 'goal', name: 'Goal', targetAmount: 100, id}));
 });

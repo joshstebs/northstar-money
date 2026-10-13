@@ -1,5 +1,5 @@
 export function normalizeCategory(value: string | null | undefined) {
-  return (value?.trim() || 'Other').replace(/[_\s]+/g, ' ').toUpperCase();
+  return (value?.trim() || 'Other').replace(/[_\s]+/g, ' ').trim().toUpperCase();
 }
 
 type PlanningInput =
@@ -29,11 +29,11 @@ export function parsePlanningInput(value: unknown, now = new Date()): PlanningIn
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('A planning item is required');
   const b = value as Record<string, unknown>;
   if (b.kind === 'budget') {
-    const month = b.month === undefined ? now.toISOString().slice(0, 7) : b.month;
+    const month = blank(b.month) ? now.toISOString().slice(0, 7) : b.month;
     if (typeof month !== 'string' || (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || month.startsWith('0000-'))) throw new Error('month must be YYYY-MM');
     return {kind: 'budget', category: text(b.category, 'category'), amount: amount(b.amount, 'amount'), month: new Date(`${month}-01T00:00:00.000Z`)};
   }
-  if (b.kind === 'goal') return {kind: 'goal', id: b.id === undefined ? undefined : text(b.id, 'id'), name: text(b.name, 'name'), targetAmount: amount(b.targetAmount, 'targetAmount'), currentAmount: blank(b.currentAmount) ? 0 : amount(b.currentAmount, 'currentAmount'), targetDate: date(b.targetDate)};
+  if (b.kind === 'goal') return {kind: 'goal', id: blank(b.id) ? undefined : text(b.id, 'id'), name: text(b.name, 'name'), targetAmount: amount(b.targetAmount, 'targetAmount'), currentAmount: blank(b.currentAmount) ? 0 : amount(b.currentAmount, 'currentAmount'), targetDate: date(b.targetDate)};
   if (b.kind === 'debt-terms') return {kind: 'debt-terms', accountId: text(b.accountId, 'accountId'), apr: blank(b.apr) ? null : amount(b.apr, 'apr', 100), minimumPayment: blank(b.minimumPayment) ? null : amount(b.minimumPayment, 'minimumPayment')};
   throw new Error('Unknown planning item');
 }
