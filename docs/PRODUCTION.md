@@ -20,7 +20,7 @@ Configure the following as encrypted deployment environment variables:
 
 - `APP_URL` — exact HTTPS production origin
 - `APP_AUTH_SECRET` — high-entropy random secret, at least 32 characters
-- `APP_AUTH_PASSWORD_HASH` — output of `npm run auth:hash -- "<private password>"`
+- `APP_AUTH_PASSWORD_HASH` — output of `npm run auth:hash -- "<private password>"`\n- `APP_SPOUSE_PASSWORD_HASH` — optional separate partner password hash (same shared household financial data)
 - `APP_ENCRYPTION_KEY` — exactly 32 random bytes encoded as base64
 - `CRON_SECRET` — independent high-entropy random secret
 
@@ -40,7 +40,7 @@ Set `FLINKS_INSTANCE`, `FLINKS_CUSTOMER_ID`, `FLINKS_AUTH_KEY`, `FLINKS_API_SECR
 ## 4. Optional AI advisor
 Set `OPENAI_API_KEY` and `OPENAI_MODEL`. The advisor receives normalized financial summaries only; provider credentials and banking tokens must never be included in prompts.
 
-## 5. Deployment verification
+## 5. Spending insights and household sharing\nOpen `/insights` to explore six-month income/spending history, monthly category and merchant breakdowns, budget tracking and alerts. The reports use posted CAD data only; internal transfers and positive credit-card transactions are excluded as a precaution. Validate transaction classification with your actual institutions.\n\nA partner can use the existing password or an optional separately configured `APP_SPOUSE_PASSWORD_HASH`. The passwords issue distinct session roles but both see and can edit the same household records; this is not a granular multi-user permission system.\n\n## 6. Deployment verification
 After deployment:
 
 1. `GET /api/health` must return HTTP 200 with `status: "ok"` and `database: "ok"`.

@@ -14,7 +14,7 @@ Private, read-only Canadian personal-finance dashboard with Plaid + Flinks conne
 - Manual refresh plus scheduled 6 AM America/Toronto synchronization.
 
 ## Security model
-- Private single-user password authentication; no public signup.
+- Private password authentication; no public signup. An optional second spouse password gives each partner a separate session but the same shared household data.
 - HttpOnly, SameSite=Strict signed session cookie and same-origin enforcement on authenticated write requests.
 - Plaid access tokens and Flinks loginIds encrypted at rest with AES-256-GCM before database persistence.
 - Plaid webhook authenticity is verified from the `Plaid-Verification` ES256 JWT, including a five-minute freshness check and SHA-256 validation of the exact raw request body.
@@ -40,15 +40,15 @@ Stebs Co currently uses Vercel Hobby. Northstar therefore defines only two once-
 1. `npm ci`
 2. Copy `.env.example` to `.env.local`.
 3. Create a strong private app password and run `npm run auth:hash -- "your password"`; store only the output in `APP_AUTH_PASSWORD_HASH`.
-4. Generate `APP_AUTH_SECRET` as a high-entropy random secret.
-5. Generate a 32-byte base64 `APP_ENCRYPTION_KEY`; never rotate it without re-encrypting stored provider credentials.
-6. Configure `DATABASE_URL`, then run `npx prisma generate && npx prisma migrate deploy`.
-7. Configure Plaid and/or Flinks sandbox credentials first.
-8. Configure `APP_URL` and `CRON_SECRET` before enabling webhooks/cron. Plaid webhook verification uses Plaid's signed JWT and does not require a shared webhook secret.
-9. Optional AI: set `OPENAI_API_KEY` and `OPENAI_MODEL`.
-10. Run `npm run verify && npm run config:check`, then `npm run dev`.
+4. Optional: generate a second password hash with the same script and set `APP_SPOUSE_PASSWORD_HASH` so your partner has a separate sign-in. Both sign-ins see the same household data.\n5. Generate `APP_AUTH_SECRET` as a high-entropy random secret.
+6. Generate a 32-byte base64 `APP_ENCRYPTION_KEY`; never rotate it without re-encrypting stored provider credentials.
+7. Configure `DATABASE_URL`, then run `npx prisma generate && npx prisma migrate deploy`.
+8. Configure Plaid and/or Flinks sandbox credentials first.
+9. Configure `APP_URL` and `CRON_SECRET` before enabling webhooks/cron. Plaid webhook verification uses Plaid's signed JWT and does not require a shared webhook secret.
+10. Optional AI: set `OPENAI_API_KEY` and `OPENAI_MODEL`.
+11. Run `npm run verify && npm run config:check`, then `npm run dev`.
 
-## Production checklist
+## Insights & household sharing\n- Open `/insights` after logging in to review income against spending, categories, six-month trends, budget progress, daily pace, merchants and purchase alerts.\n- Posted CAD transactions only. Categorized transfers and credit-card credits are excluded from Insights totals; review classifications before relying on financial decisions.\n- Set `APP_SPOUSE_PASSWORD_HASH` for a separate password without duplicating the household financial records. This is not an independent account or per-user data permission system.\n\n## Production checklist
 - Keep the GitHub repository private.
 - Use Vercel encrypted environment variables; never commit `.env.local`.
 - Keep `.env*` excluded from Vercel CLI deployment uploads via `.vercelignore`.
