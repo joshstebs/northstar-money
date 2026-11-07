@@ -41,16 +41,16 @@ test('insights count income, expenses, and normalized budgets without counting t
     {date, amount: -100, category: 'FOOD_AND_DRINK', merchantName: 'Grocer', description: 'Grocer', account: cad},
     {date, amount: -45, category: 'food and drink', merchantName: 'Market', description: 'Market', account: cad},
     {date, amount: 2500, category: 'INCOME', merchantName: 'Paycheque', description: 'Paycheque', account: cad},
-    {date, amount: -600, category: 'TRANSFER_OUT', merchantName: 'Bank transfer', description: 'Bank transfer', account: cad},
+    {date, amount: -600, category: 'INTERNAL_TRANSFER', merchantName: 'Bank transfer', description: 'Bank transfer', account: cad},
     {date, amount: 300, category: 'OTHER', merchantName: 'Card refund', description: 'Card refund', account: credit},
-    {date, amount: -40, category: 'OTHER', merchantName: 'US store', description: 'US store', account: usd},
+    {date, amount: -25, category: 'TRANSFER_OUT', merchantName: 'Rent e-transfer', description: 'Rent', account: cad},\n    {date, amount: -40, category: 'OTHER', merchantName: 'US store', description: 'US store', account: usd},
     {date: lastMonth, amount: -80, category: 'FOOD_AND_DRINK', merchantName: 'Previous', description: 'Previous', account: cad}
   ];
   const r = await reportFor(rows, [{id: 'budget', category: 'FOOD_AND_DRINK', amount: 200}]);
   assert.equal(r.income, 2500);
-  assert.equal(r.spending, 145);
-  assert.equal(r.net, 2355);
-  assert.equal(r.savingsRate, 94);
+  assert.equal(r.spending, 170);
+  assert.equal(r.net, 2330);
+  assert.equal(r.savingsRate, 93);
   assert.equal(r.excludedTransfers, 1);
   assert.equal(r.excludedForeignCurrency, 1);
   assert.equal(r.spendingByCategory[0].name, 'Food And Drink');
@@ -58,7 +58,7 @@ test('insights count income, expenses, and normalized budgets without counting t
   assert.equal(r.budgetItems[0].remaining, 55);
   assert.equal(r.budgetItems[0].percentage, 73);
   assert.equal(r.monthlyTrend.at(-2).spending, 80);
-  assert.equal(r.monthlyTrend.at(-1).spending, 145);
+  assert.equal(r.monthlyTrend.at(-1).spending, 170);
   assert.equal(r.merchants[0].name, 'Grocer');
 });
 
