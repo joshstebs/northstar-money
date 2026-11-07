@@ -13,8 +13,7 @@ function displayCategory(name: string) {
 // Money moved between accounts is not new income or a purchase.
 // Transactions whose category is unknown are deliberately retained rather than guessed.
 function isTransfer(category: string) {
-  return /(^| )(TRANSFER|TRANSFERS)( |$)/.test(category)
-    || /CREDIT CARD PAYMENT|CREDIT CARD REPAYMENT|INTERNAL PAYMENT|ACCOUNT TRANSFER/.test(category);
+  return /CREDIT CARD PAYMENT|CREDIT CARD REPAYMENT|INTERNAL PAYMENT|ACCOUNT TRANSFER|INTERNAL TRANSFER|TRANSFER BETWEEN ACCOUNTS|OWN ACCOUNT TRANSFER/.test(category);
 }
 
 export async function spendingInsights(requestedMonth?: string) {
