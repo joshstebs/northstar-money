@@ -13,7 +13,7 @@
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate deploy",
     "verify": "npm run db:validate && npm run db:generate && npm run typecheck && npm run build",
-    "test": "node --test tests/planning.test.mjs",
+    "test": "node --test",
     "test:planning:http": "node scripts/test-planning-http.mjs"
   },
   "dependencies": {
