@@ -43,7 +43,8 @@ test('insights count income, expenses, and normalized budgets without counting t
     {date, amount: 2500, category: 'INCOME', merchantName: 'Paycheque', description: 'Paycheque', account: cad},
     {date, amount: -600, category: 'INTERNAL_TRANSFER', merchantName: 'Bank transfer', description: 'Bank transfer', account: cad},
     {date, amount: 300, category: 'OTHER', merchantName: 'Card refund', description: 'Card refund', account: credit},
-    {date, amount: -25, category: 'TRANSFER_OUT', merchantName: 'Rent e-transfer', description: 'Rent', account: cad},\n    {date, amount: -40, category: 'OTHER', merchantName: 'US store', description: 'US store', account: usd},
+    {date, amount: -25, category: 'TRANSFER_OUT', merchantName: 'Rent e-transfer', description: 'Rent', account: cad},
+    {date, amount: -40, category: 'OTHER', merchantName: 'US store', description: 'US store', account: usd},
     {date: lastMonth, amount: -80, category: 'FOOD_AND_DRINK', merchantName: 'Previous', description: 'Previous', account: cad}
   ];
   const r = await reportFor(rows, [{id: 'budget', category: 'FOOD_AND_DRINK', amount: 200}]);
