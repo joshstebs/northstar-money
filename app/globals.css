@@ -73,8 +73,8 @@
 }
 @media (max-width: 650px) {
   .adviceGrid, .adviceHero { grid-template-columns: minmax(0, 1fr); }
-  .adviceTabs { gap: 1px; }
-  .adviceTabs a { font-size: 12px; }
+  .adviceTabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); width: 100%; gap: 1px; }
+  .adviceTabs a { padding: 4px 2px; font-size: 11px; text-align: center; }
   .adviceHero dl { margin: 0; }
   .row { overflow-wrap: anywhere; }
   .connect small { text-align: left; }

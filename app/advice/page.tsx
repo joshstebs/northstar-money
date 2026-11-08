@@ -49,7 +49,7 @@ export default async function AdvicePage() {
           <p>Expected bills appear after NorthStar finds enough consistent payments.</p>}
       </section>
       <section className="adviceCard"><div className="adviceCardHead"><Link href="/insights#merchants">See all merchants <ArrowUpRight size={15}/></Link></div><h2>Top merchants</h2>
-        {report.merchants.length ? <ol className="adviceRows">{report.merchants.slice(0, 3).map(item => <li key={item.name}><span>{item.name}<small>{item.count} purchases</small></span><b>{money(item.amount)}</b></li>)}</ol> :
+        {report.merchants.length ? <ol className="adviceRows">{report.merchants.slice(0, 3).map(item => <li key={item.name}><span>{item.name}<small>{item.count} {item.count === 1 ? 'purchase' : 'purchases'}</small></span><b>{money(item.amount)}</b></li>)}</ol> :
           <p>Merchant rankings appear once spending is recorded.</p>}
       </section>
       <section className="adviceCard"><div className="adviceCardHead"><Link href="/advice/goals">Manage goals <ArrowUpRight size={15}/></Link></div><h2>Shared savings goals</h2>

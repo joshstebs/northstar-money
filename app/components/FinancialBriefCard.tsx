@@ -8,7 +8,7 @@ export function FinancialBriefCard({stored, fallback, hasData}: {
   const saved = hasData ? parseFinancialBrief(stored) : null;
   const brief = saved ?? fallback;
   return <section className="briefSections" aria-label="Weekly financial brief">
-    <p>{brief.brief}</p>
+    <p>{brief.brief ?? fallback.brief}</p>
     {brief.actions.length > 0 && <div>
       <h3>Recommended actions</h3>
       <ol>{brief.actions.map((action, i) => <li key={i}>{action}</li>)}</ol>
@@ -19,4 +19,3 @@ export function FinancialBriefCard({stored, fallback, hasData}: {
     </div>}
   </section>;
 }
-
