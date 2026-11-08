@@ -1,57 +1,44 @@
-# Northstar Money production runbook
+# NorthStar Money production runbook
 
-## 1. Provision PostgreSQL
-Use a private managed PostgreSQL database. Vercel Marketplace Neon is the preferred path for this project.
+## PostgreSQL
 
-Set `DATABASE_URL` only in the deployment environment. Do not commit it.
+Keep the production `DATABASE_URL` in Vercel. Apply committed migrations before routing traffic to a release that uses the new schema.
 
-Apply the committed schema with:
-
-```bash
+```sh
 npm ci
 npm run db:generate
 npm run db:migrate
 ```
 
-Do not use `prisma db push` in production.
+Use a separate database for local testing and avoid running smoke-test writes on the production household. Verify `GET /api/health` returns HTTP 200 and reports the new commit after deployment.
 
-## 2. Generate app secrets
-Configure the following as encrypted deployment environment variables:
+## Household sign-in
 
-- `APP_URL` — exact HTTPS production origin
-- `APP_AUTH_SECRET` — high-entropy random secret, at least 32 characters
-- `APP_AUTH_PASSWORD_HASH` — output of `npm run auth:hash -- "<private password>"`\n- `APP_SPOUSE_PASSWORD_HASH` — optional separate partner password hash (same shared household financial data)
-- `APP_ENCRYPTION_KEY` — exactly 32 random bytes encoded as base64
-- `CRON_SECRET` — independent high-entropy random secret
+The owner and spouse have independent passwords and use the same private household data. Configure the existing `APP_AUTH_SECRET` and `APP_AUTH_PASSWORD_HASH` plus an optional `APP_SPOUSE_PASSWORD_HASH` as sensitive environment variables. The password hash utility is `npm run auth:hash`. Redeploy after setting a new hash. Give each household member their own private password. Sessions expire after 12 hours.
 
-Run `npm run config:check` against the intended environment before connecting financial institutions.
+Keep the existing `APP_ENCRYPTION_KEY` and `CRON_SECRET` intact. Changing the encryption key requires re-encrypting saved bank connections.
 
-Never rotate `APP_ENCRYPTION_KEY` after bank connections exist unless stored provider credentials are re-encrypted first.
+## Bank connections and statement imports
 
-## 3. Configure providers
-Start with provider test/sandbox credentials.
+- **Plaid** uses the Canadian Transactions product. Search for the issuer in the production Link window and authorize only the accounts you want NorthStar to read. A successful build or a provider listing does not establish a working live bank connection.
+- **Flinks** requires `FLINKS_INSTANCE`, `FLINKS_CUSTOMER_ID`, `FLINKS_AUTH_KEY`, `FLINKS_API_SECRET`, and `FLINKS_BASE_URL`. Configure the app origin for the embedded Connect iframe. After consent, NorthStar sends the connection identifier to its authenticated API and stores it encrypted.
+- **PC Financial Mastercard** provides a CSV export in online transaction activity. **Canadian Tire Bank Mastercard** exports Quicken QFX or Microsoft Money OFX in the online statement-period view.
+- Open the home page, then choose **Import a credit-card statement**. Enter the issuer and last four digits, then preview the file before importing. Generic CSVs need Date, Description, and Amount, or Date, Description, Debit, and Credit. Confirm the date and amount conventions. Use one file format per card and avoid importing a live-connected card. Statement imports supply activity only. A separate manual liability can record the current balance if you use file imports.
+- When a provider requires MFA or reconnection, the connection should show **Needs attention**. Confirm pending and posted items are counted once after a successful refresh.
 
-### Plaid
-Set `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`, and webhook configuration. Confirm Link completes, the access token is encrypted in the database, `/transactions/sync` imports accounts/transactions, and webhook updates are processed.
+## Advice and reporting
 
-### Flinks
-Set `FLINKS_INSTANCE`, `FLINKS_CUSTOMER_ID`, `FLINKS_AUTH_KEY`, `FLINKS_API_SECRET`, and `FLINKS_BASE_URL`. Whitelist the exact production callback origin. Confirm Connect completes and imported data is normalized into the same Account/Transaction tables.
+`/advice` covers the household overview, net worth, budgets and goals. `/insights` adds six- and twelve-month views, category and merchant detail, and payroll review. Reporting uses posted CAD activity and recognized income. Internal transfers and card payments are excluded. Refunds reduce net spending. Unknown credits are flagged for review.
 
-## 4. Optional AI advisor
-Set `OPENAI_API_KEY` and `OPENAI_MODEL`. The advisor receives normalized financial summaries only; provider credentials and banking tokens must never be included in prompts.
+Scheduled refresh records dated balance snapshots. Net-worth history grows from those snapshots. Add only manual balances that are absent from your connected accounts. Use recorded goal contributions to establish a savings pace.
 
-## 5. Spending insights and household sharing\nOpen `/insights` to explore six-month income/spending history, monthly category and merchant breakdowns, budget tracking and alerts. The reports use posted CAD data only; internal transfers and positive credit-card transactions are excluded as a precaution. Validate transaction classification with your actual institutions.\n\nA partner can use the existing password or an optional separately configured `APP_SPOUSE_PASSWORD_HASH`. The passwords issue distinct session roles but both see and can edit the same household records; this is not a granular multi-user permission system.\n\n## 6. Deployment verification
-After deployment:
+The weekly brief and observations work from recorded data without an AI service. To allow automatic AI summaries, set `AI_WEEKLY_BRIEF_ENABLED=true` with the existing `OPENAI_API_KEY` and `OPENAI_MODEL`. The weekly job supplies aggregates only. The separate Ask AI button sends the user's question and aggregate figures after they submit it.
 
-1. `GET /api/health` must return HTTP 200 with `status: "ok"` and `database: "ok"`.
-2. Sign in with the private owner password.
-3. Connect a provider sandbox/test institution first.
-4. Confirm accounts and transactions appear once, with no duplicate transactions.
-5. Trigger manual sync and confirm idempotency.
-6. Confirm budgets, goals, recurring review, anomaly review and debt planner read live normalized data.
-7. Ask the AI advisor a question and confirm no credential material appears in request/log data.
-8. Confirm scheduled 6 AM America/Toronto sync executes and audit logs record the run.
-9. Only then authorize a real Canadian institution.
+## Release checks
 
-## 6. Failure policy
-The app is fail-closed. Missing credentials, failed database access, provider MFA/re-authentication, or sync errors must produce an explicit degraded/attention state. Never display a successful connection or refresh unless persistence and ingestion succeeded.
+1. Apply the additive migration and confirm the schema is ready.
+2. Run the unit tests, TypeScript check, and production build.
+3. Check login, logout, and anonymous denial on the preview.
+4. With test credentials and synthetic data, verify the brief, import and re-import, category correction, net worth, budget and goal edits on desktop and phone layouts.
+5. Confirm the production health route reports the new commit and the household pages require sign-in.
+6. Verify real bank linking and synchronization after the household member authorizes the connection.

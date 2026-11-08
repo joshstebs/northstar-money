@@ -1,1 +1,26 @@
-export async function generateAdvisorBrief(snapshot:unknown){if(!process.env.OPENAI_API_KEY)return null;const model=process.env.OPENAI_MODEL||'gpt-5.6-luna';const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'content-type':'application/json'},body:JSON.stringify({model,input:[{role:'system',content:[{type:'input_text',text:'You are a cautious personal-finance analysis assistant. Use only supplied facts. Do not invent balances, returns, savings, tax rules, credit scores, or legal conclusions. Give concise practical observations, flag uncertainty, and never instruct autonomous transfers or trades.'}]},{role:'user',content:[{type:'input_text',text:`Review this normalized Canadian personal-finance snapshot and provide: (1) a 2-3 sentence brief, (2) up to five savings/debt actions with amounts only when supported by the data, and (3) any data-quality caveats. JSON snapshot:\n${JSON.stringify(snapshot)}`}]}],max_output_tokens:700})});if(!r.ok)throw new Error(`OpenAI advisor failed (${r.status})`);const d=await r.json();const text=(d.output??[]).flatMap((o:any)=>o.content??[]).filter((c:any)=>c.type==='output_text').map((c:any)=>c.text).join('\n').trim();return text||null}
+import {parseFinancialBrief} from '../finance/brief-parser';
+
+export async function generateAdvisorBrief(snapshot: unknown) {
+  if (!process.env.OPENAI_API_KEY || process.env.AI_WEEKLY_BRIEF_ENABLED !== 'true') return null;
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    signal: AbortSignal.timeout(15_000),
+    headers: {authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'content-type': 'application/json'},
+    body: JSON.stringify({
+      model: process.env.OPENAI_MODEL || 'gpt-5.6-luna',
+      store: false,
+      instructions: 'Explain only the calculated household CAD figures supplied. Keep the summary to two sentences and suggest two to five practical actions. Do not infer causes, balances, eligibility, returns, tax rules, or the ability to transfer money.',
+      input: JSON.stringify(snapshot),
+      text: {format: {type: 'json_schema', name: 'financial_brief', strict: true, schema: {
+        type: 'object', additionalProperties: false, required: ['brief', 'actions', 'dataQualityCaveats'],
+        properties: {brief: {type: 'string'}, actions: {type: 'array', items: {type: 'string'}}, dataQualityCaveats: {type: 'array', items: {type: 'string'}}}
+      }}},
+      max_output_tokens: 650
+    })
+  });
+  if (!response.ok) return null;
+  const result = await response.json();
+  const output = (result.output ?? []).flatMap((item: {content?: {type: string; text?: string}[]}) => item.content ?? [])
+    .filter((item: {type: string}) => item.type === 'output_text').map((item: {text?: string}) => item.text).join('\n');
+  return parseFinancialBrief(output);
+}

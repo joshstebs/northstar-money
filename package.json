@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "auth:hash": "node scripts/generate-password-hash.mjs",
@@ -13,7 +13,7 @@
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate deploy",
     "verify": "npm run db:validate && npm run db:generate && npm run typecheck && npm run build",
-    "test": "node --test tests/planning.test.mjs tests/insights.test.mjs",
+    "test": "node --test tests/*.test.mjs",
     "test:planning:http": "node scripts/test-planning-http.mjs"
   },
   "dependencies": {

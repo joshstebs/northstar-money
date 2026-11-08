@@ -25,6 +25,7 @@ export async function GET(){
   const checks={
     database,
     migration,
+    spouse:present('APP_SPOUSE_PASSWORD_HASH'),
     auth:present('APP_AUTH_SECRET')&&present('APP_AUTH_PASSWORD_HASH'),
     encryption:present('APP_ENCRYPTION_KEY'),
     appUrl:present('APP_URL'),
@@ -35,7 +36,7 @@ export async function GET(){
   };
 
   return NextResponse.json({
-    ok:database==='ok'&&checks.auth&&checks.encryption&&checks.appUrl&&checks.cron&&(plaid||flinks),
+    ok:database==='ok'&&checks.auth&&checks.encryption&&checks.appUrl&&checks.cron&&migration !== null && migration >= '20261108023000_household_advice',
     checks
   },{headers:{'Cache-Control':'no-store'}});
 }

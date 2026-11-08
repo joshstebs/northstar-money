@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import * as crypto from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
 import ts from 'typescript';
@@ -41,18 +42,21 @@ test('provider category spellings match without rewriting stored values', () => 
 test('financial snapshot counts matching transactions against existing underscore budget', async () => {
   const now = new Date();
   const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const account = {currency: 'CAD', type: 'depository'};
   const transactions = [
-    {category: 'FOOD_AND_DRINK', amount: -25, date: now, pending: false},
-    {category: 'food and drink', amount: -15, date: now, pending: false},
-    {category: 'Food_and_Drink', amount: -100, date: now, pending: true},
-    {category: 'FOOD_AND_DRINK', amount: 200, date: now, pending: false},
+    {category: 'FOOD_AND_DRINK', amount: -25, date: now, account, pending: false},
+    {category: 'food and drink', amount: -15, date: now, account, pending: false},
+    {category: 'Food_and_Drink', amount: -100, date: now, account, pending: true},
+    {category: 'FOOD_AND_DRINK', amount: 200, date: now, account, pending: false},
   ];
   const db = {
     account: {findMany: async () => []}, transaction: {findMany: async () => transactions},
     budget: {findMany: async () => [{id: 'b', category: 'FOOD_AND_DRINK', amount: 100, month}]},
     goal: {findMany: async () => []}, insight: {findMany: async () => []},
   };
-  const {financialSnapshot} = load('../lib/finance/analytics.ts', {'@/lib/db': {db}, './planning': planning});
+  const classify = load('../lib/finance/classify.ts', {'./planning': planning});
+  const payroll = load('../lib/finance/payroll.ts', {'./planning': planning, 'node:crypto': crypto});
+  const {financialSnapshot} = load('../lib/finance/analytics.ts', {'@/lib/db': {db}, './planning': planning, './classify': classify, './payroll': payroll});
   const result = await financialSnapshot();
   assert.equal(result.budgets[0].category, 'FOOD_AND_DRINK');
   assert.equal(result.budgets[0].spent, 40);
