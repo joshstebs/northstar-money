@@ -42,13 +42,13 @@ export function createSessionToken(role: HouseholdRole = 'owner') {
 
 export function verifySessionToken(token?: string | null) {
   if (!token) return false;
-  const [payload, sig] = token.split('.');
-  if (!payload || !sig) return false;
+  const [payload, sig, extra] = token.split('.');
+  if (!payload || !sig || extra !== undefined || !process.env.APP_AUTH_SECRET) return false;
   const expected = sign(payload);
   const a = Buffer.from(sig), b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return false;
   try {
     const p = JSON.parse(Buffer.from(payload, 'base64url').toString());
-    return (p.sub === 'owner' || p.sub === 'spouse') && typeof p.exp === 'number' && p.exp > Date.now();
+    return (p.sub === 'owner' || (p.sub === 'spouse' && Boolean(process.env.APP_SPOUSE_PASSWORD_HASH))) && typeof p.exp === 'number' && p.exp > Date.now();
   } catch { return false; }
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import {useCallback,useEffect,useState} from 'react';
+import {useCallback,useEffect,useRef,useState} from 'react';
+import {useRouter} from 'next/navigation';
 import {usePlaidLink} from 'react-plaid-link';
 
 type Readiness={
@@ -12,6 +13,9 @@ type Readiness={
 };
 
 export function ConnectBanks(){
+  const router = useRouter();
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [flinksUrl, setFlinksUrl] = useState<string | null>(null);
   const [token,setToken]=useState<string|null>(null);
   const [msg,setMsg]=useState('Checking bank connection setup…');
   const [busy,setBusy]=useState(false);
@@ -46,7 +50,7 @@ export function ConnectBanks(){
           }else if(d.checks.providers.flinks){
             setMsg('Flinks is configured and ready for a connection.');
           }else{
-            setMsg('No banking provider is configured yet. Add Plaid Sandbox or Flinks credentials in Vercel.');
+            setMsg('Live banking is unavailable. You can still import a statement.');
           }
           return;
         }
@@ -60,45 +64,71 @@ export function ConnectBanks(){
 
   const {open,ready}=usePlaidLink({
     token,
-    onSuccess:async(public_token)=>{
+    onSuccess:async(public_token, metadata)=>{
       setBusy(true);
       setMsg('Securing connection and starting initial sync…');
-      const r=await fetch('/api/plaid/exchange',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({public_token})});
-      const d=await r.json().catch(()=>({}));
-      setBusy(false);
-      if(r.ok&&d.persisted){
-        setMsg(`Plaid connected securely. Initial sync: ${d.initialSync?.accounts??0} accounts, ${d.initialSync?.added??0} new transactions.`);
-        window.location.reload();
-      }else setMsg(d.error??'Plaid connection failed.');
+      try {
+        const r = await fetch('/api/plaid/exchange', {method: 'POST', headers: {'content-type': 'application/json'},
+          body: JSON.stringify({public_token, institution: metadata.institution?.name})});
+        const data = await r.json();
+        setMsg(r.ok && data.persisted && !data.error ? 'Plaid connected and refreshed.' : data.error ?? 'Plaid connection failed.');
+        if (data.persisted) router.refresh();
+      } catch {setMsg('Unable to reach NorthStar. Try again.');}
+      finally {setBusy(false);}
     }
   });
 
-  async function flinks(){
-    setBusy(true);
-    setMsg('Opening Flinks secure connection…');
-    const r=await fetch('/api/flinks/authorize',{method:'POST'});
-    const d=await r.json().catch(()=>({}));
-    if(d.connectUrl)window.location.href=d.connectUrl;
-    else{
-      setBusy(false);
-      setMsg(d.error??'Flinks configuration required.');
+  useEffect(() => {
+    if (!flinksUrl) return;
+    const origin = new URL(flinksUrl).origin;
+    let handled = false;
+    async function complete(event: MessageEvent) {
+      if (handled || event.source !== frame.current?.contentWindow || event.origin !== origin ||
+          event.data?.step !== 'REDIRECT' || typeof event.data.loginId !== 'string') return;
+      handled = true;
+      setFlinksUrl(null);
+      setBusy(true);
+      try {
+        const result = await fetch('/api/flinks/complete', {method: 'POST', headers: {'content-type': 'application/json'},
+          body: JSON.stringify({loginId: event.data.loginId, institution: event.data.institution})});
+        const data = await result.json();
+        setMsg(data.error ?? (data.persisted ? 'Flinks connected and refreshed.' : 'Flinks connection failed.'));
+        if (data.persisted) router.refresh();
+      } catch {setMsg('Unable to reach NorthStar. Try again.');}
+      finally {setBusy(false);}
     }
+    window.addEventListener('message', complete);
+    return () => window.removeEventListener('message', complete);
+  }, [flinksUrl, router]);
+
+  async function flinks() {
+    setBusy(true);
+    try {
+      const result = await fetch('/api/flinks/authorize', {method: 'POST'});
+      const data = await result.json();
+      if (data.connectUrl) {setFlinksUrl(data.connectUrl); setMsg('Complete your bank’s consent and sign-in in Flinks.');}
+      else setMsg(data.error ?? 'Flinks is unavailable.');
+    } catch {setMsg('Unable to open Flinks. Try again.');}
+    finally {setBusy(false);}
   }
 
-  async function sync(){
+  async function sync() {
     setBusy(true);
     setMsg('Refreshing connected accounts…');
-    const r=await fetch('/api/sync',{method:'POST'});
-    const d=await r.json().catch(()=>({}));
-    setBusy(false);
-    if(!r.ok)return setMsg(d.error??'Sync failed');
-    const failed=(d.results??[]).filter((x:any)=>!x.ok);
-    setMsg(failed.length?`Sync completed with ${failed.length} connection requiring attention.`:'All connected accounts refreshed.');
-    window.location.reload();
+    try {
+      const r = await fetch('/api/sync', {method: 'POST'});
+      const data = await r.json();
+      if (!r.ok) {setMsg(data.error ?? 'Sync failed.'); return;}
+      const results: {ok: boolean}[] = data.results ?? [];
+      const failed = results.filter(result => !result.ok);
+      setMsg(!results.length ? 'No live accounts to refresh.' : failed.length ? `${failed.length} connection(s) need attention.` : 'Connected accounts refreshed.');
+      router.refresh();
+    } catch {setMsg('Unable to reach NorthStar. Try again.');}
+    finally {setBusy(false);}
   }
 
   const plaidConfigured=readiness?.checks.providers.plaid??Boolean(token);
-  const flinksConfigured=readiness?.checks.providers.flinks??true;
+  const flinksConfigured=readiness?.checks.providers.flinks??false;
   const plaidEnv=readiness?.checks.plaidEnvironment;
   const hasProvider=plaidConfigured||flinksConfigured;
 
@@ -108,6 +138,7 @@ export function ConnectBanks(){
     </button>
     <button className="secondary" disabled={busy||!flinksConfigured} onClick={flinks}>Connect with Flinks</button>
     <button className="secondary" disabled={busy||!hasProvider} onClick={sync}>Refresh data</button>
+    {flinksUrl && <div className="flinksConnect"><button className="secondary" onClick={() => setFlinksUrl(null)}>Close Flinks</button><iframe title="Flinks bank connection" ref={frame} src={flinksUrl} referrerPolicy="no-referrer"/></div>}
     {msg&&<small role="status" aria-live="polite">{msg}</small>}
   </div>;
 }
