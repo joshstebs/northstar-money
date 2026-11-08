@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import * as crypto from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
 import ts from 'typescript';
@@ -15,7 +16,9 @@ function load(path, dependencies = {}) {
   return module.exports;
 }
 
-const {normalizeCategory} = load('../lib/finance/planning.ts');
+const planning = load('../lib/finance/planning.ts');
+const classify = load('../lib/finance/classify.ts', {'./planning': planning});
+const payroll = load('../lib/finance/payroll.ts', {'./planning': planning, 'node:crypto': crypto});
 const thisMonth = new Date();
 const date = new Date(Date.UTC(thisMonth.getUTCFullYear(), thisMonth.getUTCMonth(), 8, 12));
 const lastMonth = new Date(Date.UTC(thisMonth.getUTCFullYear(), thisMonth.getUTCMonth() - 1, 8, 12));
@@ -27,39 +30,40 @@ const usd = {currency: 'USD', type: 'depository'};
 function reportFor(rows, budgetRows = [], accountRows = [{id: 'bank', currency: 'CAD'}]) {
   const db = {
     transaction: {findMany: async () => rows},
-    budget: {findMany: async () => budgetRows},
-    account: {findMany: async () => accountRows}
+    budget: {findMany: async () => budgetRows.map(row => ({month: date, ...row}))},
+    account: {findMany: async () => accountRows},
+    incomeSource: {findMany: async () => []}, user: {findUnique: async () => null}
   };
   const {spendingInsights} = load('../lib/finance/spending-insights.ts', {
-    '@/lib/db': {db}, '@/lib/finance/planning': {normalizeCategory}
+    '@/lib/db': {db}, './planning': planning, './classify': classify, './payroll': payroll
   });
   return spendingInsights(selectedMonth);
 }
 
-test('insights count income, expenses, and normalized budgets without counting transfers and credit-card refunds', async () => {
+test('insights count income, expenses, and normalized budgets with net refunds and without counting transfers or card payments', async () => {
   const rows = [
     {date, amount: -100, category: 'FOOD_AND_DRINK', merchantName: 'Grocer', description: 'Grocer', account: cad},
     {date, amount: -45, category: 'food and drink', merchantName: 'Market', description: 'Market', account: cad},
     {date, amount: 2500, category: 'INCOME', merchantName: 'Paycheque', description: 'Paycheque', account: cad},
     {date, amount: -600, category: 'INTERNAL_TRANSFER', merchantName: 'Bank transfer', description: 'Bank transfer', account: cad},
-    {date, amount: 300, category: 'OTHER', merchantName: 'Card refund', description: 'Card refund', account: credit},
+    {date, amount: 15, category: 'FOOD_AND_DRINK', merchantName: 'Grocer', description: 'Card refund', account: credit},
     {date, amount: -25, category: 'TRANSFER_OUT', merchantName: 'Rent e-transfer', description: 'Rent', account: cad},
     {date, amount: -40, category: 'OTHER', merchantName: 'US store', description: 'US store', account: usd},
     {date: lastMonth, amount: -80, category: 'FOOD_AND_DRINK', merchantName: 'Previous', description: 'Previous', account: cad}
   ];
   const r = await reportFor(rows, [{id: 'budget', category: 'FOOD_AND_DRINK', amount: 200}]);
   assert.equal(r.income, 2500);
-  assert.equal(r.spending, 170);
-  assert.equal(r.net, 2330);
-  assert.equal(r.savingsRate, 93);
+  assert.equal(r.spending, 155);
+  assert.equal(r.net, 2345);
+  assert.equal(r.savingsRate, 94);
   assert.equal(r.excludedTransfers, 1);
   assert.equal(r.excludedForeignCurrency, 1);
   assert.equal(r.spendingByCategory[0].name, 'Food And Drink');
-  assert.equal(r.budgetItems[0].used, 145);
-  assert.equal(r.budgetItems[0].remaining, 55);
-  assert.equal(r.budgetItems[0].percentage, 73);
+  assert.equal(r.budgetItems[0].used, 130);
+  assert.equal(r.budgetItems[0].remaining, 70);
+  assert.equal(r.budgetItems[0].percentage, 65);
   assert.equal(r.monthlyTrend.at(-2).spending, 80);
-  assert.equal(r.monthlyTrend.at(-1).spending, 170);
+  assert.equal(r.monthlyTrend.at(-1).spending, 155);
   assert.equal(r.merchants[0].name, 'Grocer');
 });
 
