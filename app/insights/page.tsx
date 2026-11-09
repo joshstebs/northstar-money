@@ -2,7 +2,7 @@ import Link from 'next/link';
 import {redirect} from 'next/navigation';
 import {
   ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, CalendarRange, ChartNoAxesCombined,
-  CircleAlert, CreditCard, Info, Landmark, WalletCards
+  CircleAlert, CreditCard, Info, Landmark, Repeat2, Sparkles, WalletCards
 } from 'lucide-react';
 import {authConfigured} from '@/lib/security/auth';
 import {hasSession} from '@/lib/security/request-auth';
@@ -128,6 +128,25 @@ export default async function InsightsPage({searchParams}: {searchParams: Promis
           </section>
         </div>
 
+        <div className={styles.twoCol}>
+          <section className={styles.panel}>
+            <div className={styles.panelHeading}><div><span className={styles.smallLabel}>RECURRING</span><h2>Bills &amp; subscriptions</h2></div><Repeat2 size={19}/></div>
+            {report.recurring.length ? report.recurring.map(item => <div key={item.merchant} className={styles.merchantRow}>
+              <div><b>{item.merchant}</b><small>{item.cadence} · next around {item.next} · {item.occurrences} recorded charges</small></div><strong>{money(item.average)}</strong>
+            </div>) : <div className={styles.noData}><p>Recurring payments appear after at least three consistent charges. Dates are estimated from your recorded activity.</p></div>}
+            {report.recurring.length > 0 && <p className={styles.hint}>Estimated from posted transactions. Merchant dates and amounts can change.</p>}
+          </section>
+          <section className={styles.panel}>
+            <div className={styles.panelHeading}><div><span className={styles.smallLabel}>OPPORTUNITIES</span><h2>Potential savings</h2></div><Sparkles size={19}/></div>
+            {report.savingsOpportunities.length ? <>
+              <p><b>{wholeMoney(report.potentialSavingsTotal)}</b> above recent category baselines this month.</p>
+              {report.savingsOpportunities.map(item => <div key={item.key} className={styles.purchaseRow}>
+                <div><b>{item.name}</b><small>Now {money(item.current)} · typical {money(item.baseline)}</small></div><strong className={styles.positive}>{money(item.possibleSavings)}</strong>
+              </div>)}
+              <p className={styles.hint}>Data-derived estimate, not a guarantee. It compares this month with up to three prior months that had activity in the category.</p>
+            </> : <div className={styles.noData}><p>No category is currently running far above its recent baseline. Opportunities need at least two prior months of activity.</p></div>}
+          </section>
+        </div>
         <div className={styles.twoCol}>
           <section className={styles.panel} id="merchants">
             <div className={styles.panelHeading}><div><span className={styles.smallLabel}>TOP PAYEES</span><h2>Where you spend most</h2></div></div>

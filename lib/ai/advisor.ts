@@ -7,7 +7,7 @@ export async function generateAdvisorBrief(snapshot: unknown) {
     signal: AbortSignal.timeout(15_000),
     headers: {authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'content-type': 'application/json'},
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || 'gpt-5.6-luna',
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
       store: false,
       instructions: 'Explain only the calculated household CAD figures supplied. Keep the summary to two sentences and suggest two to five practical actions. Do not infer causes, balances, eligibility, returns, tax rules, or the ability to transfer money.',
       input: JSON.stringify(snapshot),

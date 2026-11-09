@@ -86,3 +86,35 @@ test('zero budget limits, spending over limit and missing income are handled', a
   assert.equal(r.savingsRate, null);
   assert.equal(r.spending, 20);
 });
+
+test('insights surface consistent recurring bills and data-derived savings opportunities', async () => {
+  const daysAgo = months => new Date(Date.UTC(thisMonth.getUTCFullYear(), thisMonth.getUTCMonth() - months, 8, 12));
+  const rows = [];
+  for (const months of [0, 1, 2]) {
+    rows.push({date: daysAgo(months), amount: -15.99, category: 'ENTERTAINMENT', merchantName: 'Streaming Co', description: 'Streaming Co', account: cad});
+  }
+  for (const months of [0, 1, 2]) {
+    rows.push({date: daysAgo(months), amount: months === 0 ? -300 : -100, category: 'FOOD_AND_DRINK', merchantName: `Grocer ${months}`, description: 'Grocer', account: cad});
+  }
+  const r = await reportFor(rows);
+  const streaming = r.recurring.find(item => item.merchant === 'Streaming Co');
+  assert(streaming, 'recurring subscription should be detected');
+  assert.equal(streaming.cadence, 'Monthly');
+  assert.equal(streaming.average, 15.99);
+  assert.match(streaming.next, /^\d{4}-\d{2}-\d{2}$/);
+  const food = r.savingsOpportunities.find(item => item.name === 'Food And Drink');
+  assert(food, 'category above baseline should produce an opportunity');
+  assert.equal(food.baseline, 100);
+  assert.equal(food.possibleSavings, 190);
+  assert.equal(r.potentialSavingsTotal, 190);
+});
+
+test('insights do not invent recurring bills from too little history', async () => {
+  const r = await reportFor([
+    {date, amount: -15.99, category: 'ENTERTAINMENT', merchantName: 'One-off', description: 'One-off', account: cad},
+    {date: lastMonth, amount: -15.99, category: 'ENTERTAINMENT', merchantName: 'One-off', description: 'One-off', account: cad}
+  ]);
+  assert.equal(r.recurring.length, 0);
+  assert.equal(r.savingsOpportunities.length, 0);
+  assert.equal(r.potentialSavingsTotal, 0);
+});

@@ -34,6 +34,11 @@ Scheduled refresh records dated balance snapshots. Net-worth history grows from 
 
 The weekly brief and observations work from recorded data without an AI service. To allow automatic AI summaries, set `AI_WEEKLY_BRIEF_ENABLED=true` with the existing `OPENAI_API_KEY` and `OPENAI_MODEL`. The weekly job supplies aggregates only. The separate Ask AI button sends the user's question and aggregate figures after they submit it.
 
+## Local verification on Android/Termux
+- Use `npx next build --webpack`. Turbopack requires native bindings that are not published for Android/arm64.
+- Prisma's native query engine is unavailable on Android/arm64, so DB-backed pages, migrations and Plaid/Flinks sync integration runs must happen in Linux CI or a Linux host.
+- A shell-level `NODE_ENV=production` makes `npm ci` skip devDependencies; run `npm ci --include=dev` before `npx tsc --noEmit`.
+
 ## Release checks
 
 1. Apply the additive migration and confirm the schema is ready.
