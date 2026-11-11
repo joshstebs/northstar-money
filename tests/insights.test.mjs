@@ -18,6 +18,7 @@ function load(path, dependencies = {}) {
 
 const planning = load('../lib/finance/planning.ts');
 const classify = load('../lib/finance/classify.ts', {'./planning': planning});
+const dedupe = load('../lib/finance/dedupe.ts', {'./classify': classify});
 const payroll = load('../lib/finance/payroll.ts', {'./planning': planning, 'node:crypto': crypto});
 const thisMonth = new Date();
 const date = new Date(Date.UTC(thisMonth.getUTCFullYear(), thisMonth.getUTCMonth(), 8, 12));
@@ -35,7 +36,7 @@ function reportFor(rows, budgetRows = [], accountRows = [{id: 'bank', currency: 
     incomeSource: {findMany: async () => []}, user: {findUnique: async () => null}
   };
   const {spendingInsights} = load('../lib/finance/spending-insights.ts', {
-    '@/lib/db': {db}, './planning': planning, './classify': classify, './payroll': payroll
+    '@/lib/db': {db}, './planning': planning, './classify': classify, './dedupe': dedupe, './payroll': payroll
   });
   return spendingInsights(selectedMonth);
 }

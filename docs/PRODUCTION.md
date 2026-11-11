@@ -26,6 +26,10 @@ Keep the existing `APP_ENCRYPTION_KEY` and `CRON_SECRET` intact. Changing the en
 - Open the home page, then choose **Import a credit-card statement**. Enter the issuer and last four digits, then preview the file before importing. Generic CSVs need Date, Description, and Amount, or Date, Description, Debit, and Credit. Confirm the date and amount conventions. Use one file format per card and avoid importing a live-connected card. Statement imports supply activity only. A separate manual liability can record the current balance if you use file imports.
 - When a provider requires MFA or reconnection, the connection should show **Needs attention**. Confirm pending and posted items are counted once after a successful refresh.
 
+## Duplicate accounts across providers
+
+If the same account is linked through more than one provider (for example Plaid and Flinks), NorthStar keeps the connection with the most transaction history for balances and merges identical transactions by date, amount, merchant and pending state so spending is not counted twice. Identity is confirmed only when the accounts belong to the same household user but different providers, share the same four-digit mask and currency, have compatible account types, and the institution and account names match. A similar balance alone never establishes identity. Ambiguous matches are kept separate and reported as possible duplicates on the Advice page; stored accounts and transactions are never deleted or merged. Unlink the extra provider to keep a single source of truth.
+
 ## Advice and reporting
 
 `/advice` covers the household overview, net worth, budgets and goals. `/insights` adds six- and twelve-month views, category and merchant detail, and payroll review. Reporting uses posted CAD activity and recognized income. Internal transfers and card payments are excluded. Refunds reduce net spending. Unknown credits are flagged for review.

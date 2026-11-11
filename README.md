@@ -53,6 +53,7 @@ Stebs Co currently uses Vercel Hobby. Northstar therefore defines only two once-
 - Open `/insights` after logging in to review income against spending, categories, six-month trends, budget progress, daily pace, merchants and purchase alerts.
 - Posted CAD transactions only. Categorized transfers and credit-card credits are excluded from Insights totals; review classifications before relying on financial decisions.
 - Set `APP_SPOUSE_PASSWORD_HASH` for a separate password without duplicating the household financial records. This is not an independent account or per-user data permission system.
+- Linking the same account through multiple providers is collapsed only when identity is confirmed by matching institution, account name, mask, currency and type across providers; ambiguous matches are kept separate and reported as possible duplicates. Stored accounts and transactions are never merged or deleted.
 
 ## Production checklist
 - Keep the GitHub repository private.

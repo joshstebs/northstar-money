@@ -1,19 +1,24 @@
 import {db} from '@/lib/db';
 import {normalizeCategory, householdDay} from './planning';
 import {accountKind, classifyTransaction} from './classify';
+import {analyzeDuplicateAccounts, dedupeTransactions, duplicateAccountMap} from './dedupe';
 import {paymentCadence} from './payroll';
 const num=(v:unknown)=>Number(v??0);
 const monthKey=(d:Date)=>`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
 export async function financialSnapshot(userId='owner'){
   const now=new Date(), today=new Date(`${householdDay(now)}T12:00:00Z`),monthStart=new Date(Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),1)),sixMonthsAgo=new Date(Date.UTC(today.getUTCFullYear(),today.getUTCMonth()-6,1));
   const [accounts,tx,budgets,goals,storedInsights]=await Promise.all([
-    db.account.findMany({where:{userId},include:{connection:true},orderBy:{name:'asc'}}),
+    db.account.findMany({where:{userId},include:{connection:true,_count:{select:{transactions:true}}},orderBy:{name:'asc'}}),
     db.transaction.findMany({where:{account:{userId},date:{gte:sixMonthsAgo}},include:{account:true},orderBy:{date:'desc'}}),
     db.budget.findMany({where:{userId},orderBy:{month:'desc'}}),
     db.goal.findMany({where:{userId},orderBy:{targetDate:'asc'}}),
     db.insight.findMany({where:{userId,dismissed:false},orderBy:{createdAt:'desc'},take:10})
   ]);
-  const flows = tx.map(transaction => ({...transaction, ...classifyTransaction(transaction)}));
+  const duplicates=analyzeDuplicateAccounts(accounts);
+  const duplicateIds=duplicateAccountMap(duplicates.confirmed);
+  const canonicalAccounts=accounts.filter(account=>!duplicateIds.has(account.id));
+  const dedupedTx=dedupeTransactions(tx,duplicateIds);
+  const flows = dedupedTx.map(transaction => ({...transaction, ...classifyTransaction(transaction)}));
   const current = flows.filter(t => t.date >= monthStart);
   const postedCount = current.filter(t => ['income', 'spending', 'refund'].includes(t.type)).length;
   const spent = -current.filter(t => t.type === 'spending' || t.type === 'refund').reduce((sum, t) => sum + t.cents, 0) / 100;
@@ -30,7 +35,7 @@ export async function financialSnapshot(userId='owner'){
     }
   }
   const categorySpend = [...categoryMap].map(([name, value]) => ({name, value})).sort((a, b) => b.value - a.value);
-  const comparable = accounts.filter(a => a.currency === 'CAD');
+  const comparable = canonicalAccounts.filter(a => a.currency === 'CAD');
   const liquid = comparable.filter(a => accountKind(a) === 'cash').reduce((sum, a) => sum + num(a.currentBalance), 0);
   const debtAccounts = comparable.filter(a => accountKind(a) === 'debt');
   const debt = debtAccounts.reduce((sum, a) => sum + Math.max(0, num(a.currentBalance)), 0);
@@ -67,6 +72,6 @@ export async function financialSnapshot(userId='owner'){
 
   const currentBudgets=budgets.filter(b=>monthKey(b.month)===monthKey(monthStart)).map(b=>{const spent=categoryMap.get(normalizeCategory(b.category))??0;return {id:b.id,category:b.category,amount:num(b.amount),spent,remaining:num(b.amount)-spent,percent:num(b.amount)>0?Math.round(spent/num(b.amount)*100):0}});
   const debtPlan=debtAccounts.map(a=>({id:a.id,name:a.name,balance:Math.max(0,num(a.currentBalance)),apr:a.interestRate===null?null:num(a.interestRate),minimumPayment:a.minimumPayment===null?null:num(a.minimumPayment)})).sort((a,b)=>(b.apr??-1)-(a.apr??-1));
-  return {postedCount, generatedAt:now.toISOString(),metrics:{liquidCash:liquid,creditDebt:debt,spentThisMonth:spent,incomeThisMonth:earned,netCashFlow:earned-spent,potentialSavings:opportunities.reduce((s,x)=>s+x.possibleSavings,0)},accounts:accounts.map(a=>({id:a.id,name:a.name,institution:a.connection.institutionName??a.connection.provider,mask:a.mask,type:a.type,balance:a.currentBalance === null ? null : num(a.currentBalance),currency:a.currency,lastSyncedAt:a.connection.lastSyncedAt?.toISOString()??null,status:a.connection.status,apr:a.interestRate===null?null:num(a.interestRate),minimumPayment:a.minimumPayment===null?null:num(a.minimumPayment)})),categorySpend,opportunities,recurring,anomalies,budgets:currentBudgets,goals:goals.map(g=>({id:g.id,name:g.name,targetAmount:num(g.targetAmount),currentAmount:num(g.currentAmount),targetDate:g.targetDate?.toISOString()??null,percent:num(g.targetAmount)>0?Math.min(100,Math.round(num(g.currentAmount)/num(g.targetAmount)*100)):0})),debtPlan,debtPlanReady:debtPlan.length>0&&debtPlan.every(x=>x.apr!==null),storedInsights:storedInsights.map(i=>({id:i.id,type:i.type,title:i.title,body:i.body,amount:i.amount===null?null:num(i.amount),createdAt:i.createdAt.toISOString()})),recentTransactions:tx.slice(0,30).map(t=>({merchant:t.merchantName??t.description??'Transaction',category:normalizeCategory(t.userCategory || t.category),amount:num(t.amount),currency:t.currency ?? t.account.currency,date:t.date.toISOString(),pending:t.pending}))}
+  return {postedCount, generatedAt:now.toISOString(),metrics:{liquidCash:liquid,creditDebt:debt,spentThisMonth:spent,incomeThisMonth:earned,netCashFlow:earned-spent,potentialSavings:opportunities.reduce((s,x)=>s+x.possibleSavings,0)},accounts:canonicalAccounts.map(a=>({id:a.id,name:a.name,institution:a.connection.institutionName??a.connection.provider,mask:a.mask,type:a.type,balance:a.currentBalance === null ? null : num(a.currentBalance),currency:a.currency,lastSyncedAt:a.connection.lastSyncedAt?.toISOString()??null,status:a.connection.status,apr:a.interestRate===null?null:num(a.interestRate),minimumPayment:a.minimumPayment===null?null:num(a.minimumPayment)})),categorySpend,opportunities,recurring,anomalies,budgets:currentBudgets,goals:goals.map(g=>({id:g.id,name:g.name,targetAmount:num(g.targetAmount),currentAmount:num(g.currentAmount),targetDate:g.targetDate?.toISOString()??null,percent:num(g.targetAmount)>0?Math.min(100,Math.round(num(g.currentAmount)/num(g.targetAmount)*100)):0})),debtPlan,debtPlanReady:debtPlan.length>0&&debtPlan.every(x=>x.apr!==null),storedInsights:storedInsights.map(i=>({id:i.id,type:i.type,title:i.title,body:i.body,amount:i.amount===null?null:num(i.amount),createdAt:i.createdAt.toISOString()})),recentTransactions:dedupedTx.slice(0,30).map(t=>({merchant:t.merchantName??t.description??'Transaction',category:normalizeCategory(t.userCategory || t.category),amount:num(t.amount),currency:t.currency ?? t.account.currency,date:t.date.toISOString(),pending:t.pending}))}
 }
 

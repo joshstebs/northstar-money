@@ -1,6 +1,7 @@
 import {db} from '@/lib/db';
 import {normalizeCategory, householdDay} from './planning';
 import {budgetStatus, classifyTransaction} from './classify';
+import {analyzeDuplicateAccounts, dedupeTransactions, duplicateAccountMap} from './dedupe';
 import {paymentCadence, payrollSource} from './payroll';
 
 const monthKey = (date: Date) => date.toISOString().slice(0, 7);
@@ -25,15 +26,18 @@ export async function spendingInsights(requestedMonth?: string, period = 6) {
   const months = Array.from({length: period === 12 ? 12 : 6}, (_, i) => i);
   const timelineMonths = months.map(i => monthStart(selected, i - months.length + 1));
   const next = monthStart(selected, 1);
-  const [rows, accounts, sourceRows, household] = await Promise.all([
+  const [rawRows, accounts, sourceRows, household] = await Promise.all([
     db.transaction.findMany({
       where: {account: {userId: 'owner'}, pending: false, date: {gte: hasRollover && earliestBudget && earliestBudget < timelineMonths[0] ? monthStart(earliestBudget) : timelineMonths[0], lt: next}},
       include: {account: {select: {currency: true, type: true, subtype: true}}}, orderBy: {date: 'desc'}
     }),
-    db.account.findMany({where: {userId: 'owner'}, select: {id: true}}),
+    db.account.findMany({where: {userId: 'owner'}, select: {id: true, userId: true, name: true, connectionId: true, mask: true, type: true, subtype: true, currency: true, currentBalance: true, connection: {select: {provider: true, status: true, institutionName: true, lastSyncedAt: true}}, _count: {select: {transactions: true}}}}),
     db.incomeSource.findMany({where: {userId: 'owner'}}),
     db.user.findUnique({where: {id: 'owner'}, select: {budgetWarningPercent: true}})
   ]);
+  const duplicateIds = duplicateAccountMap(analyzeDuplicateAccounts(accounts).confirmed);
+  const rows = dedupeTransactions(rawRows, duplicateIds);
+  const canonicalAccountCount = accounts.filter(account => !duplicateIds.has(account.id)).length;
   const warning = household?.budgetWarningPercent ?? 80;
   const sources = new Map(sourceRows.map(row => [row.sourceKey, row.confirmed]));
   const monthly = new Map(timelineMonths.map(date => [monthKey(date), {month: monthKey(date), income: 0, spending: 0, count: 0}]));
@@ -204,7 +208,7 @@ export async function spendingInsights(requestedMonth?: string, period = 6) {
 
   return {
     month: selectedKey, monthLabel: options.find(o => o.value === selectedKey)?.label ?? selectedKey,
-    monthOptions: options, hasAccounts: accounts.length > 0, isCurrentMonth: currentCalendarMonth,
+    monthOptions: options, hasAccounts: canonicalAccountCount > 0, isCurrentMonth: currentCalendarMonth,
     hasTransactions: transactionCount > 0, transactionCount,
     income, spending, net: (Math.round(income * 100) - Math.round(spending * 100)) / 100,
     savingsRate: income > 0 ? Math.round((income - spending) / income * 100) : null,
