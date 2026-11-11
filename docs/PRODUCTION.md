@@ -26,6 +26,10 @@ Keep the existing `APP_ENCRYPTION_KEY` and `CRON_SECRET` intact. Changing the en
 - Open the home page, then choose **Import a credit-card statement**. Enter the issuer and last four digits, then preview the file before importing. Generic CSVs need Date, Description, and Amount, or Date, Description, Debit, and Credit. Confirm the date and amount conventions. Use one file format per card and avoid importing a live-connected card. Statement imports supply activity only. A separate manual liability can record the current balance if you use file imports.
 - When a provider requires MFA or reconnection, the connection should show **Needs attention**. Confirm pending and posted items are counted once after a successful refresh.
 
+## Duplicate accounts across providers
+
+If the same account is linked through more than one provider (for example Plaid and Flinks), NorthStar keeps the connection with the most transaction history for balances and merges identical transactions by date, amount, merchant and pending state so spending is not counted twice. Identity is confirmed only when the accounts belong to the same household user but different providers, share the same four-digit mask and currency, have compatible account types, and the institution and account names match. A similar balance alone never establishes identity. Ambiguous matches are kept separate and reported as possible duplicates on the Advice page; stored accounts and transactions are never deleted or merged. Unlink the extra provider to keep a single source of truth.
+
 ## Advice and reporting
 
 `/advice` covers the household overview, net worth, budgets and goals. `/insights` adds six- and twelve-month views, category and merchant detail, and payroll review. Reporting uses posted CAD activity and recognized income. Internal transfers and card payments are excluded. Refunds reduce net spending. Unknown credits are flagged for review.
@@ -33,6 +37,11 @@ Keep the existing `APP_ENCRYPTION_KEY` and `CRON_SECRET` intact. Changing the en
 Scheduled refresh records dated balance snapshots. Net-worth history grows from those snapshots. Add only manual balances that are absent from your connected accounts. Use recorded goal contributions to establish a savings pace.
 
 The weekly brief and observations work from recorded data without an AI service. To allow automatic AI summaries, set `AI_WEEKLY_BRIEF_ENABLED=true` with the existing `OPENAI_API_KEY` and `OPENAI_MODEL`. The weekly job supplies aggregates only. The separate Ask AI button sends the user's question and aggregate figures after they submit it.
+
+## Local verification on Android/Termux
+- Use `npx next build --webpack`. Turbopack requires native bindings that are not published for Android/arm64.
+- Prisma's native query engine is unavailable on Android/arm64, so DB-backed pages, migrations and Plaid/Flinks sync integration runs must happen in Linux CI or a Linux host.
+- A shell-level `NODE_ENV=production` makes `npm ci` skip devDependencies; run `npm ci --include=dev` before `npx tsc --noEmit`.
 
 ## Release checks
 

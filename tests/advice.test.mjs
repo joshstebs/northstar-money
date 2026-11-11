@@ -21,7 +21,8 @@ const {budgetStatus, classifyTransaction} = classify;
 const {parseFinancialBrief} = load('../lib/finance/brief-parser.ts');
 const {availableBrief, bankDataStale} = load('../lib/finance/advice.ts');
 const {goalProgress} = load('../lib/finance/goals.ts');
-const {balanceTotals} = load('../lib/finance/net-worth.ts', {'@/lib/db': {}, './classify': classify});
+const dedupe = load('../lib/finance/dedupe.ts', {'./classify': classify});
+const {balanceTotals} = load('../lib/finance/net-worth.ts', {'@/lib/db': {}, './classify': classify, './dedupe': dedupe});
 const {paymentCadence, payrollSource} = load('../lib/finance/payroll.ts', {'./planning': planning, 'node:crypto': crypto});
 const {parseCardStatement} = load('../lib/finance/statement-import.ts', {'node:crypto': crypto});
 const auth = load('../lib/security/auth.ts', {'node:crypto': crypto});
@@ -35,7 +36,8 @@ test('financial brief supports objects, JSON strings, fenced and double-encoded 
 });
 
 test('financial brief rejects malformed JSON, filters missing fields and retains plain text', () => {
-  for (const value of ['{"brief":', '[{"brief":"secret"}]', '{"unknown":"value"}', '{broken', null]) assert.equal(parseFinancialBrief(value), null);
+  for (const value of ['{"brief":', '[{"brief":"secret"},{"brief":"second"}]', '{"unknown":"value"}', '{broken', null]) assert.equal(parseFinancialBrief(value), null);
+  assert.deepEqual(parseFinancialBrief('[{"brief":"secret"}]'), {brief: 'secret', actions: [], dataQualityCaveats: []});
   assert.deepEqual(parseFinancialBrief({brief: 2, actions: [null, false, 'Review bills']}), {brief: null, actions: ['Review bills'], dataQualityCaveats: []});
   assert.equal(parseFinancialBrief('Review next month’s bills.').brief, 'Review next month’s bills.');
 });
@@ -137,4 +139,25 @@ test('separate owner and spouse passwords produce expiring, signed household ses
     delete process.env.APP_SPOUSE_PASSWORD_HASH;
     assert(!auth.verifySessionToken(token));
   } finally {process.env = oldEnv; Date.now = realNow;}
+});
+
+test('stored weekly brief JSON is never rendered as raw JSON', () => {
+  const stored = JSON.stringify({brief: 'Income covered spending this month.', actions: ['Review groceries'], dataQualityCaveats: ['One account is stale.']});
+  const parsed = parseFinancialBrief(stored);
+  assert.deepEqual(parsed, {brief: 'Income covered spending this month.', actions: ['Review groceries'], dataQualityCaveats: ['One account is stale.']});
+  assert.doesNotMatch(parsed.brief, /^[\[{]/);
+  for (const raw of [JSON.stringify({brief: '{"spent":120}'}), '{"brief":', '```json\n{"broken":true}\n```', '{"other":1}']) {
+    assert.equal(parseFinancialBrief(raw), null);
+  }
+});
+
+test('brief parser accepts wrapped, aliased and single-item payloads', () => {
+  const expected = {brief: 'A cautious summary.', actions: ['Check the food budget.'], dataQualityCaveats: ['A connection needs attention.']};
+  const cases = [
+    {data: {brief: 'A cautious summary.', recommendedActions: ['Check the food budget.'], warnings: ['A connection needs attention.']}},
+    {result: {summary: 'A cautious summary.', recommendations: [{title: 'Check the food budget.'}], caveats: ['A connection needs attention.']}},
+    [{financial_brief: {overview: 'A cautious summary.', actions: ['Check the food budget.'], dataQuality: ['A connection needs attention.']}}],
+    JSON.stringify({payload: {headline: 'A cautious summary.', actions: ['Check the food budget.'], dataQualityCaveats: ['A connection needs attention.']}})
+  ];
+  for (const value of cases) assert.deepEqual(parseFinancialBrief(value), expected);
 });

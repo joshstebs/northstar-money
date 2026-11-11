@@ -6,6 +6,7 @@ import {financialSnapshot} from '@/lib/finance/analytics';
 import {generateAdvisorBrief} from '@/lib/ai/advisor';
 import {availableBrief, bankDataStale} from '@/lib/finance/advice';
 import {balanceTotals} from '@/lib/finance/net-worth';
+import {analyzeDuplicateAccounts, duplicateAccountMap} from '@/lib/finance/dedupe';
 import {householdDay} from '@/lib/finance/planning';
 
 function torontoParts(){
@@ -45,9 +46,11 @@ export async function GET(req:NextRequest){
     }
   }
 
-  const accounts = await db.account.findMany({where: {userId: 'owner'}, include: {connection: true}});
-  const totals = balanceTotals(accounts);
-  if (totals.counted && !bankDataStale(accounts.map(a => ({status: a.connection.status, lastSyncedAt: a.connection.lastSyncedAt?.toISOString() ?? null})))) {
+  const accounts = await db.account.findMany({where: {userId: 'owner'}, include: {connection: true, _count: {select: {transactions: true}}}});
+  const duplicateIds = duplicateAccountMap(analyzeDuplicateAccounts(accounts).confirmed);
+  const canonical = accounts.filter(a => !duplicateIds.has(a.id));
+  const totals = balanceTotals(canonical);
+  if (totals.counted && !bankDataStale(canonical.map(a => ({status: a.connection.status, lastSyncedAt: a.connection.lastSyncedAt?.toISOString() ?? null})))) {
     const day = new Date(`${householdDay()}T00:00:00Z`);
     const data = {assets: totals.assets, liabilities: totals.liabilities};
     await db.balanceSnapshot.upsert({where: {userId_day: {userId: 'owner', day}}, update: data, create: {userId: 'owner', day, ...data}});

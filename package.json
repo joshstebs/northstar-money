@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "build:local": "prisma generate && next build --webpack",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "auth:hash": "node scripts/generate-password-hash.mjs",

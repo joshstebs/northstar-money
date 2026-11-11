@@ -1,6 +1,7 @@
 import {db} from '@/lib/db';
 import {normalizeCategory, householdDay} from './planning';
 import {budgetStatus, classifyTransaction} from './classify';
+import {analyzeDuplicateAccounts, dedupeTransactions, duplicateAccountMap} from './dedupe';
 import {paymentCadence, payrollSource} from './payroll';
 
 const monthKey = (date: Date) => date.toISOString().slice(0, 7);
@@ -25,21 +26,26 @@ export async function spendingInsights(requestedMonth?: string, period = 6) {
   const months = Array.from({length: period === 12 ? 12 : 6}, (_, i) => i);
   const timelineMonths = months.map(i => monthStart(selected, i - months.length + 1));
   const next = monthStart(selected, 1);
-  const [rows, accounts, sourceRows, household] = await Promise.all([
+  const [rawRows, accounts, sourceRows, household] = await Promise.all([
     db.transaction.findMany({
       where: {account: {userId: 'owner'}, pending: false, date: {gte: hasRollover && earliestBudget && earliestBudget < timelineMonths[0] ? monthStart(earliestBudget) : timelineMonths[0], lt: next}},
       include: {account: {select: {currency: true, type: true, subtype: true}}}, orderBy: {date: 'desc'}
     }),
-    db.account.findMany({where: {userId: 'owner'}, select: {id: true}}),
+    db.account.findMany({where: {userId: 'owner'}, select: {id: true, userId: true, name: true, connectionId: true, mask: true, type: true, subtype: true, currency: true, currentBalance: true, connection: {select: {provider: true, status: true, institutionName: true, lastSyncedAt: true}}, _count: {select: {transactions: true}}}}),
     db.incomeSource.findMany({where: {userId: 'owner'}}),
     db.user.findUnique({where: {id: 'owner'}, select: {budgetWarningPercent: true}})
   ]);
+  const analysis = analyzeDuplicateAccounts(accounts);
+  const duplicateIds = duplicateAccountMap(analysis.confirmed);
+  const rows = dedupeTransactions(rawRows, duplicateIds);
+  const canonicalAccountCount = accounts.filter(account => !duplicateIds.has(account.id)).length;
   const warning = household?.budgetWarningPercent ?? 80;
   const sources = new Map(sourceRows.map(row => [row.sourceKey, row.confirmed]));
   const monthly = new Map(timelineMonths.map(date => [monthKey(date), {month: monthKey(date), income: 0, spending: 0, count: 0}]));
   const categories = new Map<string, number>();
   const historicalCategories = new Map<string, Map<string, number>>();
   const merchants = new Map<string, {name: string; trends: Map<string, number>; purchases: Detail[]}>();
+  const recurringCandidates = new Map<string, {name: string; amounts: number[]; dates: Date[]}>();
   const incomeGroups = new Map<string, {name: string; identified: boolean; confirmed?: boolean; amounts: number[]; dates: Date[]; transactionId: string}>();
   const daily = new Map<number, number>();
   const expenses: Detail[] = [];
@@ -89,6 +95,12 @@ export async function spendingInsights(requestedMonth?: string, period = 6) {
     const merchant = merchants.get(merchantKey) ?? {name, trends: new Map<string, number>(), purchases: [] as Detail[]};
     merchant.trends.set(key, (merchant.trends.get(key) ?? 0) - cents);
     merchants.set(merchantKey, merchant);
+    if (type === 'spending') {
+      const group = recurringCandidates.get(merchantKey) ?? {name, amounts: [], dates: []};
+      group.amounts.push(-cents / 100);
+      group.dates.push(t.date);
+      recurringCandidates.set(merchantKey, group);
+    }
     if (!selectedRow) continue;
     categories.set(category, (categories.get(category) ?? 0) - cents);
     daily.set(t.date.getUTCDate(), (daily.get(t.date.getUTCDate()) ?? 0) - cents);
@@ -110,6 +122,29 @@ export async function spendingInsights(requestedMonth?: string, period = 6) {
     share: positiveCategoryTotal ? Math.round(Math.max(0, cents) / positiveCategoryTotal * 100) : 0,
     chartShare: positiveCategoryTotal ? Math.max(0, cents) / positiveCategoryTotal * 100 : 0
   })).sort((a, b) => b.amount - a.amount);
+  const savingsOpportunities = spendingByCategory.flatMap(item => {
+    if (item.amount <= 0) return [];
+    const past = [1, 2, 3].map(offset => historicalCategories.get(monthKey(monthStart(selected, -offset)))?.get(item.key))
+      .filter((value): value is number => value !== undefined);
+    if (past.length < 2) return [];
+    const baseline = past.reduce((sum, value) => sum + Math.max(0, value), 0) / past.length / 100;
+    const possibleSavings = Math.max(0, Math.round((item.amount - baseline * 1.1) * 100) / 100);
+    return possibleSavings >= 10
+      ? [{key: item.key, name: item.name, current: item.amount, baseline: Math.round(baseline * 100) / 100, possibleSavings}]
+      : [];
+  }).sort((a, b) => b.possibleSavings - a.possibleSavings).slice(0, 6);
+  const potentialSavingsTotal = Math.round(savingsOpportunities.reduce((sum, item) => sum + item.possibleSavings, 0) * 100) / 100;
+  const recurring = [...recurringCandidates.values()].flatMap(group => {
+    const cadence = paymentCadence(group.dates, group.amounts);
+    if (!cadence || group.amounts.length < 3) return [];
+    const average = group.amounts.reduce((sum, amount) => sum + amount, 0) / group.amounts.length;
+    if (average < 5) return [];
+    return [{
+      merchant: group.name, average: Math.round(average * 100) / 100, occurrences: group.amounts.length,
+      next: new Date(group.dates[0].getTime() + cadence.days * 86_400_000).toISOString().slice(0, 10),
+      cadence: cadence.label, monthly: Math.round(average * cadence.perMonth * 100) / 100
+    }];
+  }).sort((a, b) => a.next.localeCompare(b.next)).slice(0, 8);
   const budgetsByMonth = new Map<string, Map<string, typeof budgets>>();
   for (const budget of budgets) {
     const month = monthKey(budget.month);
@@ -169,12 +204,14 @@ export async function spendingInsights(requestedMonth?: string, period = 6) {
   }
   const qualityNotes = [
     excludedForeignCurrency ? `${excludedForeignCurrency} non-CAD transaction(s) were excluded.` : null,
-    excludedUnclassified ? `${excludedUnclassified} transaction(s) need a spending or income category before they can be included.` : null
+    excludedUnclassified ? `${excludedUnclassified} transaction(s) need a spending or income category before they can be included.` : null,
+    analysis.possible.length ? `${analysis.possible.length} possible duplicate account group(s) were kept separate because identity could not be confirmed.` : null
   ].filter((note): note is string => Boolean(note));
 
   return {
     month: selectedKey, monthLabel: options.find(o => o.value === selectedKey)?.label ?? selectedKey,
-    monthOptions: options, hasAccounts: accounts.length > 0, isCurrentMonth: currentCalendarMonth,
+    monthOptions: options, hasAccounts: canonicalAccountCount > 0, isCurrentMonth: currentCalendarMonth,
+    possibleDuplicateAccounts: analysis.possible.length,
     hasTransactions: transactionCount > 0, transactionCount,
     income, spending, net: (Math.round(income * 100) - Math.round(spending * 100)) / 100,
     savingsRate: income > 0 ? Math.round((income - spending) / income * 100) : null,
@@ -183,6 +220,7 @@ export async function spendingInsights(requestedMonth?: string, period = 6) {
     budgeted, usedFromBudgets, budgetItems, warning,
     unbudgeted: spendingByCategory.filter(c => c.amount > 0 && !budgetGroups.has(c.key)),
     spendingByCategory, expenses, review,
+    recurring, savingsOpportunities, potentialSavingsTotal,
     merchants: [...merchants.values()].map(m => ({
       name: m.name, amount: (m.trends.get(selectedKey) ?? 0) / 100, count: m.purchases.filter(p => p.amount > 0).length,
       previous: previous.count ? (m.trends.get(previousKey) ?? 0) / 100 : null,

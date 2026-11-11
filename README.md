@@ -40,15 +40,22 @@ Stebs Co currently uses Vercel Hobby. Northstar therefore defines only two once-
 1. `npm ci`
 2. Copy `.env.example` to `.env.local`.
 3. Create a strong private app password and run `npm run auth:hash -- "your password"`; store only the output in `APP_AUTH_PASSWORD_HASH`.
-4. Optional: generate a second password hash with the same script and set `APP_SPOUSE_PASSWORD_HASH` so your partner has a separate sign-in. Both sign-ins see the same household data.\n5. Generate `APP_AUTH_SECRET` as a high-entropy random secret.
+4. Optional: generate a second password hash with the same script and set `APP_SPOUSE_PASSWORD_HASH` so your partner has a separate sign-in. Both sign-ins see the same household data.
+5. Generate `APP_AUTH_SECRET` as a high-entropy random secret.
 6. Generate a 32-byte base64 `APP_ENCRYPTION_KEY`; never rotate it without re-encrypting stored provider credentials.
 7. Configure `DATABASE_URL`, then run `npx prisma generate && npx prisma migrate deploy`.
 8. Configure Plaid and/or Flinks sandbox credentials first.
 9. Configure `APP_URL` and `CRON_SECRET` before enabling webhooks/cron. Plaid webhook verification uses Plaid's signed JWT and does not require a shared webhook secret.
-10. Optional AI: set `OPENAI_API_KEY` and `OPENAI_MODEL`.
+10. Optional AI: set `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-4o-mini`) and `AI_WEEKLY_BRIEF_ENABLED=true` for scheduled AI briefs.
 11. Run `npm run verify && npm run config:check`, then `npm run dev`.
 
-## Insights & household sharing\n- Open `/insights` after logging in to review income against spending, categories, six-month trends, budget progress, daily pace, merchants and purchase alerts.\n- Posted CAD transactions only. Categorized transfers and credit-card credits are excluded from Insights totals; review classifications before relying on financial decisions.\n- Set `APP_SPOUSE_PASSWORD_HASH` for a separate password without duplicating the household financial records. This is not an independent account or per-user data permission system.\n\n## Production checklist
+## Insights & household sharing
+- Open `/insights` after logging in to review income against spending, categories, six-month trends, budget progress, daily pace, merchants and purchase alerts.
+- Posted CAD transactions only. Categorized transfers and credit-card credits are excluded from Insights totals; review classifications before relying on financial decisions.
+- Set `APP_SPOUSE_PASSWORD_HASH` for a separate password without duplicating the household financial records. This is not an independent account or per-user data permission system.
+- Linking the same account through multiple providers is collapsed only when identity is confirmed by matching institution, account name, mask, currency and type across providers; ambiguous matches are kept separate and reported as possible duplicates. Stored accounts and transactions are never merged or deleted.
+
+## Production checklist
 - Keep the GitHub repository private.
 - Use Vercel encrypted environment variables; never commit `.env.local`.
 - Keep `.env*` excluded from Vercel CLI deployment uploads via `.vercelignore`.
@@ -61,3 +68,8 @@ Stebs Co currently uses Vercel Hobby. Northstar therefore defines only two once-
 
 ## Verification
 GitHub Actions must pass `npm ci`, `prisma validate`, `prisma generate`, `prisma migrate deploy` against PostgreSQL, TypeScript typecheck and the production Next.js build before merge. Live financial connectivity is only considered verified after the owner explicitly authorizes a real/test institution; the project never fabricates banking success.
+
+### Local verification on Android/Termux
+- Turbopack has no native Android bindings. Build locally with `npx next build --webpack`; Vercel/Ubuntu CI can keep the default Turbopack build.
+- Prisma's native query engine is not available for Android/arm64, so database-backed pages and `prisma migrate deploy` must run in Linux CI or a Linux host. Typechecks, unit tests and header/auth smoke tests still run locally.
+- If `NODE_ENV=production` is set in the shell, `npm ci` omits devDependencies. Use `npm ci --include=dev` before typechecking.

@@ -50,6 +50,8 @@ async function NetWorth() {
         <label>Liabilities <progress value={worth.liabilities} max={Math.max(1, worth.assets, worth.liabilities)}/></label>
       </div>}
       {worth.excluded > 0 && <p>{worth.excluded} balances were excluded because the amount, currency, or account type could not be used.</p>}
+      {worth.duplicateAccounts > 0 && <p>{worth.duplicateAccounts} duplicate connected account{worth.duplicateAccounts === 1 ? ' was' : 's were'} excluded from totals because the same account is linked through more than one provider.</p>}
+      {worth.possibleDuplicateAccounts > 0 && <p>{worth.possibleDuplicateAccounts} possible duplicate account group{worth.possibleDuplicateAccounts === 1 ? ' was' : 's were'} kept separate because identity could not be confirmed.</p>}
     </section>
     <section className="adviceCard"><h2>Add a manual balance</h2><p>Use this for property, debts, and other balances you haven’t already connected.</p>
       <ActionForm button="Add balance" action={{kind: 'balance'}} fields={[...balanceFields]} reset>
