@@ -48,8 +48,8 @@ test('institution and account names match provider spellings but not distinct pr
 
 test('confirms the same account linked through Plaid and Flinks and keeps the richer account', () => {
   const analysis = analyzeDuplicateAccounts([
-    account({id: 'plaid-account', provider: 'plaid', transactions: 4}),
-    account({id: 'flinks-account', connectionId: 'flinks-connection', provider: 'flinks', transactions: 9})
+    account({id: 'plaid-account', provider: 'Plaid', transactions: 4}),
+    account({id: 'flinks-account', connectionId: 'flinks-connection', provider: 'FLINKS', transactions: 9})
   ]);
   assert.equal(analysis.confirmed.length, 1);
   assert.equal(analysis.confirmed[0].canonicalId, 'flinks-account');

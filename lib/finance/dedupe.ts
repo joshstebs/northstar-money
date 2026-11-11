@@ -240,6 +240,8 @@ export function analyzeDuplicateAccounts(accounts: DedupeAccount[]): DuplicateAn
           leftGroup.add(id);
           groupOf.set(id, leftGroup);
         }
+        const absorbed = groups.indexOf(rightGroup);
+        if (absorbed >= 0) groups.splice(absorbed, 1);
       }
     }
   }
