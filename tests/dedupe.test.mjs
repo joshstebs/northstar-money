@@ -42,19 +42,41 @@ test('institution and account names match provider spellings but not distinct pr
   assert.equal(accountNamesMatch('Chequing', 'Chequing'), true);
   assert.equal(accountNamesMatch('Everyday Chequing', 'Chequing'), true);
   assert.equal(accountNamesMatch('Chequing', 'Savings'), false);
+  assert.equal(accountNamesMatch('Everyday Chequing', 'Everyday Savings'), false);
   assert.equal(accountNamesMatch(null, 'Chequing'), null);
 });
 
 test('confirms the same account linked through Plaid and Flinks and keeps the richer account', () => {
   const analysis = analyzeDuplicateAccounts([
     account({id: 'plaid-account', provider: 'plaid', transactions: 4}),
-    account({id: 'flinks-account', connectionId: 'flinks-connection', provider: 'flinks', type: 'Operations', subtype: null, transactions: 9})
+    account({id: 'flinks-account', connectionId: 'flinks-connection', provider: 'flinks', transactions: 9})
   ]);
   assert.equal(analysis.confirmed.length, 1);
   assert.equal(analysis.confirmed[0].canonicalId, 'flinks-account');
   assert.deepEqual(analysis.confirmed[0].duplicateIds, ['plaid-account']);
   assert.deepEqual([...duplicateAccountMap(analysis.confirmed)], [['plaid-account', 'flinks-account']]);
   assert.equal(analysis.possible.length, 0);
+});
+
+test('an unknown account type downgrades a match to possible instead of confirming it', () => {
+  const analysis = analyzeDuplicateAccounts([
+    account({id: 'known', provider: 'plaid', type: 'depository'}),
+    account({id: 'unknown', connectionId: 'flinks-connection', provider: 'flinks', type: 'Operations', subtype: null})
+  ]);
+  assert.equal(analysis.confirmed.length, 0);
+  assert.equal(analysis.possible.length, 1);
+  assert.match(analysis.possible[0].reason, /Account type/);
+});
+
+test('transitive name differences cannot pull an unconfirmed account into a group', () => {
+  const analysis = analyzeDuplicateAccounts([
+    account({id: 'a', provider: 'plaid', name: 'Chequing'}),
+    account({id: 'b', connectionId: 'flinks-connection', provider: 'flinks', name: 'Everyday Chequing'}),
+    account({id: 'c', connectionId: 'statement-connection', provider: 'statement', name: 'Everyday'})
+  ]);
+  assert.equal(analysis.confirmed.length, 1);
+  assert.deepEqual(analysis.confirmed[0].accountIds, ['a', 'b']);
+  assert.equal(analysis.confirmed[0].duplicateIds.includes('c'), false);
 });
 
 test('preserves two legitimate accounts that share the same last four digits', () => {
@@ -118,6 +140,16 @@ test('a similar balance alone never establishes identity', () => {
   assert.deepEqual(analysis.possible[0].accountIds, ['left', 'right']);
 });
 
+test('the canonical account keeps the only usable balance', () => {
+  const analysis = analyzeDuplicateAccounts([
+    account({id: 'empty', provider: 'plaid', transactions: 40, currentBalance: null}),
+    account({id: 'funded', connectionId: 'flinks-connection', provider: 'flinks', transactions: 1, currentBalance: 5000})
+  ]);
+  assert.equal(analysis.confirmed.length, 1);
+  assert.equal(analysis.confirmed[0].canonicalId, 'funded');
+  assert.deepEqual(analysis.confirmed[0].duplicateIds, ['empty']);
+});
+
 test('stale balances still match while the canonical account prefers a fresh, connected provider', () => {
   const analysis = analyzeDuplicateAccounts([
     account({id: 'stale', provider: 'plaid', status: 'attention', transactions: 50, currentBalance: 1000, lastSyncedAt: new Date('2026-01-01T00:00:00Z')}),
@@ -128,13 +160,15 @@ test('stale balances still match while the canonical account prefers a fresh, co
   assert.deepEqual(analysis.confirmed[0].duplicateIds, ['stale']);
 });
 
-test('accounts belonging to different users are never compared', () => {
-  const analysis = analyzeDuplicateAccounts([
+test('accounts belonging to different or missing users are never compared', () => {
+  assert.equal(analyzeDuplicateAccounts([
     account({id: 'owner-account', userId: 'owner'}),
     account({id: 'spouse-account', userId: 'spouse', connectionId: 'spouse-connection', provider: 'flinks'})
-  ]);
-  assert.equal(analysis.confirmed.length, 0);
-  assert.equal(analysis.possible.length, 0);
+  ]).confirmed.length, 0);
+  assert.equal(analyzeDuplicateAccounts([
+    account({id: 'first', userId: null}),
+    account({id: 'second', userId: null, connectionId: 'second-connection', provider: 'flinks'})
+  ]).confirmed.length, 0);
 });
 
 test('keeps the maximum number of repeated purchases across a duplicate group', () => {
@@ -148,6 +182,27 @@ test('keeps the maximum number of repeated purchases across a duplicate group', 
   ];
   const kept = dedupeTransactions(rows, map).map(row => row.id);
   assert.deepEqual(kept.sort(), ['a1', 'a2', 'b3', 'c1']);
+});
+
+test('matches raw provider descriptions against clean merchant names', () => {
+  const map = duplicateAccountMap([{canonicalId: 'canonical', duplicateIds: ['dupe'], accountIds: ['canonical', 'dupe']}]);
+  const date = new Date('2026-11-01T12:00:00Z');
+  const rows = [
+    {id: 'plaid', accountId: 'canonical', amount: -4.5, date, merchantName: 'Tim Hortons', pending: false},
+    {id: 'flinks', accountId: 'dupe', amount: -4.5, date, description: 'PURCHASE - TIM HORTONS #4412', pending: false}
+  ];
+  const kept = dedupeTransactions(rows, map).map(row => row.id);
+  assert.deepEqual(kept, ['plaid']);
+});
+
+test('prefers the copy that carries the user category', () => {
+  const map = duplicateAccountMap([{canonicalId: 'canonical', duplicateIds: ['dupe'], accountIds: ['canonical', 'dupe']}]);
+  const date = new Date('2026-11-01T12:00:00Z');
+  const rows = [
+    {id: 'plain', accountId: 'canonical', amount: -4.5, date, merchantName: 'Cafe', pending: false},
+    {id: 'categorised', accountId: 'dupe', amount: -4.5, date, merchantName: 'Cafe', pending: false, userCategory: 'FOOD_AND_DRINK'}
+  ];
+  assert.deepEqual(dedupeTransactions(rows, map).map(row => row.id), ['categorised']);
 });
 
 test('pending and posted copies are kept separate', () => {

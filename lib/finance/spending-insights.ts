@@ -35,7 +35,8 @@ export async function spendingInsights(requestedMonth?: string, period = 6) {
     db.incomeSource.findMany({where: {userId: 'owner'}}),
     db.user.findUnique({where: {id: 'owner'}, select: {budgetWarningPercent: true}})
   ]);
-  const duplicateIds = duplicateAccountMap(analyzeDuplicateAccounts(accounts).confirmed);
+  const analysis = analyzeDuplicateAccounts(accounts);
+  const duplicateIds = duplicateAccountMap(analysis.confirmed);
   const rows = dedupeTransactions(rawRows, duplicateIds);
   const canonicalAccountCount = accounts.filter(account => !duplicateIds.has(account.id)).length;
   const warning = household?.budgetWarningPercent ?? 80;
@@ -203,12 +204,14 @@ export async function spendingInsights(requestedMonth?: string, period = 6) {
   }
   const qualityNotes = [
     excludedForeignCurrency ? `${excludedForeignCurrency} non-CAD transaction(s) were excluded.` : null,
-    excludedUnclassified ? `${excludedUnclassified} transaction(s) need a spending or income category before they can be included.` : null
+    excludedUnclassified ? `${excludedUnclassified} transaction(s) need a spending or income category before they can be included.` : null,
+    analysis.possible.length ? `${analysis.possible.length} possible duplicate account group(s) were kept separate because identity could not be confirmed.` : null
   ].filter((note): note is string => Boolean(note));
 
   return {
     month: selectedKey, monthLabel: options.find(o => o.value === selectedKey)?.label ?? selectedKey,
     monthOptions: options, hasAccounts: canonicalAccountCount > 0, isCurrentMonth: currentCalendarMonth,
+    possibleDuplicateAccounts: analysis.possible.length,
     hasTransactions: transactionCount > 0, transactionCount,
     income, spending, net: (Math.round(income * 100) - Math.round(spending * 100)) / 100,
     savingsRate: income > 0 ? Math.round((income - spending) / income * 100) : null,
