@@ -15,6 +15,8 @@ function readable(value: unknown, limit = 1800) {
   if (!trimmed || /^(?:null|undefined|true|false)$/i.test(trimmed)) return null;
   // Never surface a JSON container, fenced block or escaped JSON object as brief copy.
   if (/^(?:\{|\[|`|"(?:[\[{\\]))/.test(trimmed)) return null;
+  // Reject copy that embeds a JSON fragment (e.g. prose preface + truncated model output).
+  if (/[\[{]\s*\\?"[^"\n]{0,80}\\?"\s*:/.test(trimmed) || /```/.test(trimmed)) return null;
   return trimmed.slice(0, limit);
 }
 
