@@ -55,8 +55,9 @@ test('financial snapshot counts matching transactions against existing underscor
     goal: {findMany: async () => []}, insight: {findMany: async () => []},
   };
   const classify = load('../lib/finance/classify.ts', {'./planning': planning});
+  const dedupe = load('../lib/finance/dedupe.ts', {'./classify': classify});
   const payroll = load('../lib/finance/payroll.ts', {'./planning': planning, 'node:crypto': crypto});
-  const {financialSnapshot} = load('../lib/finance/analytics.ts', {'@/lib/db': {db}, './planning': planning, './classify': classify, './payroll': payroll});
+  const {financialSnapshot} = load('../lib/finance/analytics.ts', {'@/lib/db': {db}, './planning': planning, './classify': classify, './dedupe': dedupe, './payroll': payroll});
   const result = await financialSnapshot();
   assert.equal(result.budgets[0].category, 'FOOD_AND_DRINK');
   assert.equal(result.budgets[0].spent, 40);

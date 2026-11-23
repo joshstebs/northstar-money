@@ -34,7 +34,11 @@ export default async function AdvicePage() {
     </section>
     <div className="adviceGrid">
       <section className="adviceCard adviceWide"><p className="adviceKicker">WEEKLY REVIEW</p><h2>Your weekly financial brief</h2>
-        <FinancialBriefCard stored={latest?.body} fallback={fallback} hasData={report.hasTransactions}/>
+        <FinancialBriefCard stored={latest?.body} fallback={fallback} hasData={report.hasTransactions}
+          periodLabel={report.monthLabel}
+          figures={{income: report.income, spending: report.spending, net: report.net, spendingChangePct: report.monthOverMonthSpending}}
+          observations={report.alerts.map(alert => `${alert.title}: ${alert.detail}`)}
+          upcoming={upcoming.map(item => ({merchant: item.merchant, average: item.average, next: item.next}))}/>
       </section>
       <section className="adviceCard"><div className="adviceCardHead"><Wallet size={20}/><Link href="/advice/net-worth">View net worth <ArrowUpRight size={15}/></Link></div><h2>Current net worth</h2>
         <strong className="adviceAmount">{worth.counted ? money(worth.net) : '—'}</strong>

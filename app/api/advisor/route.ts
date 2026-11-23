@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST', signal: AbortSignal.timeout(15_000),
       headers: {authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'content-type': 'application/json'},
-      body: JSON.stringify({model: process.env.OPENAI_MODEL || 'gpt-5.6-luna', store: false,
+      body: JSON.stringify({model: process.env.OPENAI_MODEL || 'gpt-4o-mini', store: false,
         instructions: 'Explain only the supplied aggregate household CAD totals. State when data is insufficient. Do not invent balances, APRs, savings, legal or tax rules, scores, returns or transactions. Use readable plain text.',
         input: JSON.stringify({question, totals}), max_output_tokens: 700})
     });

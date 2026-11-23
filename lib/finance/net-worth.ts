@@ -1,5 +1,6 @@
 import {db} from '@/lib/db';
 import {accountKind} from './classify';
+import {analyzeDuplicateAccounts, duplicateAccountMap} from './dedupe';
 
 type Balance = {type: string; subtype?: string | null; currency: string; currentBalance: unknown};
 
@@ -25,12 +26,15 @@ export function balanceTotals(accounts: Balance[]) {
 
 export async function netWorth(userId = 'owner') {
   const [accounts, snapshots] = await Promise.all([
-    db.account.findMany({where: {userId}, include: {connection: {select: {provider: true, status: true, lastSyncedAt: true, institutionName: true}}}, orderBy: {name: 'asc'}}),
+    db.account.findMany({where: {userId}, include: {connection: {select: {provider: true, status: true, lastSyncedAt: true, institutionName: true}}, _count: {select: {transactions: true}}}, orderBy: {name: 'asc'}}),
     db.balanceSnapshot.findMany({where: {userId}, orderBy: {day: 'desc'}, take: 370})
   ]);
-  const balances = accounts.map(account => ({...account, currentBalance: account.currentBalance === null ? null : Number(account.currentBalance)}));
+  const analysis = analyzeDuplicateAccounts(accounts);
+  const duplicateIds = duplicateAccountMap(analysis.confirmed);
+  const canonical = accounts.filter(account => !duplicateIds.has(account.id));
+  const balances = canonical.map(account => ({...account, currentBalance: account.currentBalance === null ? null : Number(account.currentBalance)}));
   return {
-    ...balanceTotals(balances), accounts: balances,
+    ...balanceTotals(balances), accounts: balances, duplicateAccounts: duplicateIds.size, possibleDuplicateAccounts: analysis.possible.length,
     history: snapshots.reverse().map(row => ({date: row.day.toISOString().slice(0, 10), assets: Number(row.assets), liabilities: Number(row.liabilities), net: Number(row.assets.minus(row.liabilities))}))
   };
 }
